@@ -5,17 +5,20 @@ import { Activity } from 'lucide-react';
 interface NeuralWaveformProps {
   data: { time: number; value: number }[];
   isScanning: boolean;
+  isBreached?: boolean;
 }
 
-export function NeuralWaveform({ data, isScanning }: NeuralWaveformProps) {
+export function NeuralWaveform({ data, isScanning, isBreached = false }: NeuralWaveformProps) {
+  const strokeColor = isBreached ? 'hsl(var(--destructive))' : 'hsl(var(--primary))';
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glassmorphism rounded-xl p-4"
+      className={`glassmorphism rounded-xl p-4 ${isBreached ? 'cyber-glow-danger border-destructive/50' : ''}`}
     >
       <div className="flex items-center gap-2 mb-3">
-        <Activity className="w-4 h-4 text-primary" />
+        <Activity className={`w-4 h-4 ${isBreached ? 'text-destructive' : 'text-primary'}`} />
         <span className="text-sm font-mono text-muted-foreground">NEURAL WAVEFORM</span>
         {isScanning && (
           <motion.div
@@ -23,8 +26,10 @@ export function NeuralWaveform({ data, isScanning }: NeuralWaveformProps) {
             transition={{ duration: 1, repeat: Infinity }}
             className="ml-auto flex items-center gap-1"
           >
-            <div className="w-2 h-2 rounded-full bg-primary" />
-            <span className="text-xs text-primary font-mono">LIVE</span>
+            <div className={`w-2 h-2 rounded-full ${isBreached ? 'bg-destructive' : 'bg-primary'}`} />
+            <span className={`text-xs font-mono ${isBreached ? 'text-destructive' : 'text-primary'}`}>
+              {isBreached ? 'BREACH' : 'LIVE'}
+            </span>
           </motion.div>
         )}
       </div>
@@ -38,7 +43,7 @@ export function NeuralWaveform({ data, isScanning }: NeuralWaveformProps) {
             <Line
               type="monotone"
               dataKey="value"
-              stroke="hsl(var(--primary))"
+              stroke={strokeColor}
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
