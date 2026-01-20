@@ -1,20 +1,23 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Target } from 'lucide-react';
+import { MousePointer2, Target, Bot } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface PrecisionTraceProps {
   onMouseMove: (x: number, y: number) => void;
   mouseVariance: number;
   isComplete: boolean;
+  onSimulateBotCircle?: () => void;
 }
 
-export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: PrecisionTraceProps) {
+export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimulateBotCircle }: PrecisionTraceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   const [isTracing, setIsTracing] = useState(false);
+  const [isSimulatingBot, setIsSimulatingBot] = useState(false);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!containerRef.current || !isTracing) return;
+    if (!containerRef.current || !isTracing || isSimulatingBot) return;
     
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -22,10 +25,46 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
     
     onMouseMove(x, y);
     setPath(prev => [...prev, { x, y }].slice(-100));
-  }, [onMouseMove, isTracing]);
+  }, [onMouseMove, isTracing, isSimulatingBot]);
 
-  const handleMouseEnter = () => setIsTracing(true);
-  const handleMouseLeave = () => setIsTracing(false);
+  const handleMouseEnter = () => !isSimulatingBot && setIsTracing(true);
+  const handleMouseLeave = () => !isSimulatingBot && setIsTracing(false);
+
+  // Simulate perfect bot circle
+  const simulateBotCircle = useCallback(() => {
+    if (!containerRef.current) return;
+    
+    setIsSimulatingBot(true);
+    setPath([]);
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const radius = 40;
+    
+    let step = 0;
+    const totalSteps = 60;
+    
+    const interval = setInterval(() => {
+      const angle = (step / totalSteps) * 2 * Math.PI;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+      
+      // Report exact mathematical position (0% jitter)
+      onMouseMove(x, y);
+      setPath(prev => [...prev, { x, y }]);
+      
+      step++;
+      
+      if (step >= totalSteps) {
+        clearInterval(interval);
+        setIsSimulatingBot(false);
+        if (onSimulateBotCircle) onSimulateBotCircle();
+      }
+    }, 30);
+  }, [onMouseMove, onSimulateBotCircle]);
+
+  const isPerfectCircle = mouseVariance < 1 && path.length > 20;
 
   return (
     <motion.div
@@ -39,7 +78,9 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
         <span className="text-sm font-mono text-muted-foreground">PRECISION TRACE ANALYSIS</span>
       </div>
       
-      <div className="glassmorphism rounded-lg p-4 space-y-3">
+      <div className={`glassmorphism rounded-lg p-4 space-y-3 ${
+        isPerfectCircle ? 'border-destructive/50 cyber-glow-danger' : ''
+      }`}>
         <div className="text-xs font-mono text-muted-foreground">
           TRACE THE CIRCLE PATH:
         </div>
@@ -49,16 +90,20 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
           onMouseMove={handleMouseMove}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className="relative w-full h-40 bg-background/30 rounded-lg border border-border/50 overflow-hidden cursor-crosshair"
+          className={`relative w-full h-40 bg-background/30 rounded-lg border overflow-hidden cursor-crosshair ${
+            isPerfectCircle ? 'border-destructive/50' : 'border-border/50'
+          }`}
         >
           {/* Target circle */}
           <div className="absolute inset-0 flex items-center justify-center">
             <motion.div
-              animate={isTracing ? { scale: [1, 1.02, 1] } : {}}
+              animate={isTracing || isSimulatingBot ? { scale: [1, 1.02, 1] } : {}}
               transition={{ duration: 2, repeat: Infinity }}
-              className="w-24 h-24 rounded-full border-2 border-dashed border-primary/40 flex items-center justify-center"
+              className={`w-24 h-24 rounded-full border-2 border-dashed flex items-center justify-center ${
+                isPerfectCircle ? 'border-destructive/40' : 'border-primary/40'
+              }`}
             >
-              <Target className="w-6 h-6 text-primary/40" />
+              <Target className={`w-6 h-6 ${isPerfectCircle ? 'text-destructive/40' : 'text-primary/40'}`} />
             </motion.div>
           </div>
           
@@ -68,14 +113,14 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
               <motion.path
                 d={`M ${path.map(p => `${p.x},${p.y}`).join(' L ')}`}
                 fill="none"
-                stroke="hsl(var(--primary))"
+                stroke={isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
                 style={{
-                  filter: 'drop-shadow(0 0 4px hsl(var(--primary)))',
+                  filter: `drop-shadow(0 0 4px ${isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'})`,
                 }}
               />
             )}
@@ -84,19 +129,31 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
           {/* Cursor indicator */}
           {path.length > 0 && (
             <motion.div
-              className="absolute w-3 h-3 bg-primary rounded-full"
+              className={`absolute w-3 h-3 rounded-full ${isPerfectCircle ? 'bg-destructive' : 'bg-primary'}`}
               style={{
                 left: path[path.length - 1].x - 6,
                 top: path[path.length - 1].y - 6,
-                boxShadow: '0 0 10px hsl(var(--primary))',
+                boxShadow: `0 0 10px ${isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}`,
               }}
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 0.5, repeat: Infinity }}
             />
           )}
           
+          {/* Bot simulation indicator */}
+          {isSimulatingBot && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute top-2 right-2 flex items-center gap-1 bg-destructive/80 px-2 py-1 rounded text-[10px] font-mono text-destructive-foreground"
+            >
+              <Bot className="w-3 h-3" />
+              <span>BOT MODE</span>
+            </motion.div>
+          )}
+          
           {/* Instruction overlay */}
-          {!isTracing && path.length === 0 && (
+          {!isTracing && !isSimulatingBot && path.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-xs text-muted-foreground font-mono bg-background/80 px-2 py-1 rounded">
                 HOVER TO BEGIN TRACING
@@ -105,10 +162,36 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete }: Preci
           )}
         </div>
         
-        <div className="flex justify-between text-xs font-mono text-muted-foreground">
-          <span>Variance: {mouseVariance.toFixed(2)}px</span>
+        {/* Perfect Circle Warning */}
+        {isPerfectCircle && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 text-xs font-mono text-destructive bg-destructive/10 px-3 py-2 rounded"
+          >
+            <Bot className="w-3 h-3" />
+            <span>PERFECT CIRCLE DETECTED: Variance &lt;1px indicates automation</span>
+          </motion.div>
+        )}
+        
+        <div className="flex justify-between items-center text-xs font-mono text-muted-foreground">
+          <span className={isPerfectCircle ? 'text-destructive' : ''}>
+            Variance: {mouseVariance.toFixed(2)}px {isPerfectCircle && '⚠️'}
+          </span>
           <span>{path.length} points captured</span>
         </div>
+        
+        {/* Simulate Bot Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={simulateBotCircle}
+          disabled={isSimulatingBot}
+          className="w-full text-xs font-mono border-warning/50 text-warning hover:bg-warning/10"
+        >
+          <Bot className="w-3 h-3 mr-2" />
+          {isSimulatingBot ? 'SIMULATING...' : 'SIMULATE BOT (0% JITTER)'}
+        </Button>
       </div>
     </motion.div>
   );

@@ -1,11 +1,32 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Cpu, Github } from 'lucide-react';
 import { SecurityTerminal } from './SecurityTerminal';
 import { ProjectNarrative } from './ProjectNarrative';
+import { WebcamShield } from './WebcamShield';
+import { DeveloperTools } from './DeveloperTools';
+import { SystemBreachAlert } from './SystemBreachAlert';
+import { useBiometricTracker } from '@/hooks/useBiometricTracker';
 
 export function NeuroSignature() {
+  const [showBreachAlert, setShowBreachAlert] = useState(false);
+  const [simulateDeepfake, setSimulateDeepfake] = useState(false);
+  const { triggerBotMode, reset } = useBiometricTracker();
+
+  const handleBreachDetected = () => {
+    setShowBreachAlert(true);
+    setTimeout(() => setShowBreachAlert(false), 4000);
+  };
+
+  const handleSimulateBot = () => {
+    handleBreachDetected();
+  };
+
   return (
     <div className="min-h-screen bg-background cyber-grid">
+      {/* System Breach Alert Overlay */}
+      <SystemBreachAlert isVisible={showBreachAlert} />
+      
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -27,15 +48,20 @@ export function NeuroSignature() {
             </div>
           </div>
           
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Github className="w-5 h-5" />
-            <span className="hidden sm:inline font-mono">View Source</span>
-          </a>
+          <div className="flex items-center gap-4">
+            {/* Webcam Shield */}
+            <WebcamShield simulateDeepfake={simulateDeepfake} />
+            
+            <a
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Github className="w-5 h-5" />
+              <span className="hidden sm:inline font-mono">View Source</span>
+            </a>
+          </div>
         </div>
       </motion.header>
       
@@ -66,7 +92,17 @@ export function NeuroSignature() {
           </p>
         </motion.div>
         
-        <SecurityTerminal />
+        <SecurityTerminal onBreachDetected={handleBreachDetected} />
+        
+        {/* Developer Tools */}
+        <div className="max-w-4xl mx-auto mt-6">
+          <DeveloperTools
+            onSimulateBot={handleSimulateBot}
+            simulateDeepfake={simulateDeepfake}
+            onToggleDeepfake={setSimulateDeepfake}
+          />
+        </div>
+        
         <ProjectNarrative />
       </main>
       
