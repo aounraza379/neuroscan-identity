@@ -14,9 +14,10 @@ const TARGET_PHRASE = 'I am a biological entity.';
 
 interface SecurityTerminalProps {
   onBreachDetected?: () => void;
+  onVerificationComplete?: (success: boolean, confidence: number) => void;
 }
 
-export function SecurityTerminal({ onBreachDetected }: SecurityTerminalProps) {
+export function SecurityTerminal({ onBreachDetected, onVerificationComplete }: SecurityTerminalProps) {
   const [typedText, setTypedText] = useState('');
   const [testState, setTestState] = useState<'idle' | 'scanning' | 'complete'>('idle');
   const [isPasteDetected, setIsPasteDetected] = useState(false);
@@ -49,7 +50,11 @@ export function SecurityTerminal({ onBreachDetected }: SecurityTerminalProps) {
     setTypedText(value);
     
     if (value === TARGET_PHRASE && hasMouseData) {
-      setTimeout(() => setTestState('complete'), 500);
+      setTimeout(() => {
+        setTestState('complete');
+        const currentResult = analyzeResult();
+        onVerificationComplete?.(currentResult.isHuman, currentResult.confidence);
+      }, 500);
     }
   };
 
