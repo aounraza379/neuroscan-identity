@@ -11,13 +11,17 @@ import { SessionRiskMonitor } from './SessionRiskMonitor';
 import { NeuralProfileManager } from './NeuralProfileManager';
 import { SecurityBreachLock } from './SecurityBreachLock';
 import { ShieldStatus } from './ShieldStatus';
+import { GripStabilityMeter } from './GripStabilityMeter';
+import { SessionIntegrityBadge } from './SessionIntegrityBadge';
 import { useBiometricTracker } from '@/hooks/useBiometricTracker';
+import { useHMOG } from '@/hooks/useHMOG';
 
 export function NeuroSignature() {
   const [showBreachAlert, setShowBreachAlert] = useState(false);
   const [simulateDeepfake, setSimulateDeepfake] = useState(false);
   const [isPageLocked, setIsPageLocked] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false); // Global unlock state
   
   const { 
     data,
@@ -26,6 +30,13 @@ export function NeuroSignature() {
     triggerBotMode, 
     reset 
   } = useBiometricTracker();
+
+  const {
+    data: hmogData,
+    simulateRoboticHand,
+    setSimulateRoboticHand,
+    reset: resetHMOG
+  } = useHMOG();
 
   const result = analyzeResult();
 
@@ -39,20 +50,22 @@ export function NeuroSignature() {
     return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
   }, [handleMouseMove]);
 
-  // Monitor for breach condition
+  // Monitor for breach condition - include HMOG static device detection
   useEffect(() => {
-    if (data.isBreached || data.isBotMode) {
+    if (data.isBreached || data.isBotMode || hmogData.isStaticDevice) {
       setIsPageLocked(true);
       setIsVerified(false);
+      setIsUnlocked(false);
     }
-  }, [data.isBreached, data.isBotMode]);
+  }, [data.isBreached, data.isBotMode, hmogData.isStaticDevice]);
 
-  // Track verification status
+  // Track verification status - CRITICAL FIX: Once verified, stay verified
   useEffect(() => {
-    if (result.isHuman && result.confidence >= 85 && !data.isBreached) {
+    if (result.isHuman && result.confidence >= 85 && !data.isBreached && !hmogData.isStaticDevice) {
       setIsVerified(true);
+      setIsUnlocked(true); // Set global unlock state
     }
-  }, [result.isHuman, result.confidence, data.isBreached]);
+  }, [result.isHuman, result.confidence, data.isBreached, hmogData.isStaticDevice]);
 
   const handleBreachDetected = useCallback(() => {
     setShowBreachAlert(true);
@@ -70,30 +83,47 @@ export function NeuroSignature() {
   const handleVerificationComplete = useCallback((success: boolean, confidence: number) => {
     if (success && confidence >= 85) {
       setIsVerified(true);
+      setIsUnlocked(true); // Ensure global unlock
     }
   }, []);
 
   const handleTransferAttempt = () => {
-    // In a real app, this would open a transfer modal
     console.log('Transfer initiated with neural verification');
+  };
+
+  const handleSliderBotDetected = () => {
+    handleBreachDetected();
+    triggerBotMode();
   };
 
   const handleFullReset = () => {
     reset();
+    resetHMOG();
     setIsPageLocked(false);
     setShowBreachAlert(false);
     setIsVerified(false);
+    setIsUnlocked(false);
   };
+
+  const isBreached = data.isBreached || hmogData.isStaticDevice;
 
   return (
     <div className="min-h-screen bg-background cyber-grid">
+      {/* Session Integrity Badge - Top Center */}
+      <SessionIntegrityBadge
+        isVerified={isUnlocked}
+        isBreached={isBreached}
+        confidence={result.confidence}
+        isStaticDevice={hmogData.isStaticDevice}
+      />
+      
       {/* Full-screen Security Breach Lock */}
       <SecurityBreachLock isVisible={isPageLocked} onReset={handleFullReset} />
       
       {/* Shield Status Indicator */}
       <ShieldStatus 
-        isVerified={isVerified} 
-        isBreached={data.isBreached} 
+        isVerified={isUnlocked} 
+        isBreached={isBreached} 
         confidence={result.confidence}
       />
       
@@ -104,7 +134,7 @@ export function NeuroSignature() {
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="border-b border-border/50 backdrop-blur-sm"
+        className="border-b border-border/50 backdrop-blur-sm pt-14"
       >
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -169,8 +199,8 @@ export function NeuroSignature() {
         <div className="max-w-4xl mx-auto mb-6">
           <SessionRiskMonitor
             confidence={result.confidence}
-            isBreached={data.isBreached}
-            isVerified={isVerified}
+            isBreached={isBreached}
+            isVerified={isUnlocked}
             mouseVariance={data.mouseVariance}
           />
         </div>
@@ -180,14 +210,26 @@ export function NeuroSignature() {
           onVerificationComplete={handleVerificationComplete}
         />
 
-        {/* Neural Profile Manager */}
-        <div className="max-w-4xl mx-auto mt-6 grid md:grid-cols-2 gap-6">
+        {/* Neural Profile Manager + Grip Stability + Developer Tools */}
+        <div className="max-w-4xl mx-auto mt-6 grid md:grid-cols-3 gap-6">
           <NeuralProfileManager
             avgDwellTime={data.avgDwellTime}
             avgFlightTime={data.avgFlightTime}
             timingVariance={data.timingVariance}
             mouseVariance={data.mouseVariance}
-            isVerified={isVerified}
+            isVerified={isUnlocked}
+          />
+          
+          {/* Grip Stability Meter (HMOG) */}
+          <GripStabilityMeter
+            gripStability={hmogData.gripStability}
+            isStaticDevice={hmogData.isStaticDevice}
+            isSupported={hmogData.isSupported}
+            tiltData={{
+              alpha: hmogData.alpha,
+              beta: hmogData.beta,
+              gamma: hmogData.gamma
+            }}
           />
           
           {/* Developer Tools */}
@@ -195,15 +237,18 @@ export function NeuroSignature() {
             onSimulateBot={handleSimulateBot}
             simulateDeepfake={simulateDeepfake}
             onToggleDeepfake={setSimulateDeepfake}
+            simulateRoboticHand={simulateRoboticHand}
+            onToggleRoboticHand={setSimulateRoboticHand}
           />
         </div>
 
         {/* Banking Dashboard */}
         <BankingDashboard
-          isVerified={isVerified}
+          isVerified={isUnlocked}
           confidence={result.confidence}
           onTransferAttempt={handleTransferAttempt}
-          isBreached={data.isBreached}
+          onBotDetected={handleSliderBotDetected}
+          isBreached={isBreached}
         />
         
         <ProjectNarrative />
