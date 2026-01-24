@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Fingerprint, 
@@ -7,7 +7,8 @@ import {
   Lock, 
   Cpu,
   Database,
-  ShieldCheck
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -38,6 +39,24 @@ export function NeuralProfileManager({
   const [savedProfile, setSavedProfile] = useState<NeuralProfile | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [matchPercentage, setMatchPercentage] = useState<number | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+  const [matchPulse, setMatchPulse] = useState(0);
+
+  // Real-time matching animation when profile is saved
+  useEffect(() => {
+    if (!savedProfile || !isVerified) return;
+
+    setIsMatching(true);
+    const interval = setInterval(() => {
+      // Simulate real-time matching with slight variations
+      const baseMatch = 95 + Math.random() * 4.5;
+      const noise = (Math.random() - 0.5) * 2; // ±1% noise
+      setMatchPercentage(Math.min(99.9, Math.max(94, baseMatch + noise)));
+      setMatchPulse(prev => prev + 1);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [savedProfile, isVerified]);
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -57,9 +76,9 @@ export function NeuralProfileManager({
     setSavedProfile(newProfile);
     setIsSaving(false);
     
-    // Simulate matching calculation
+    // Initial match calculation
     setTimeout(() => {
-      setMatchPercentage(95 + Math.random() * 4.9); // 95-99.9%
+      setMatchPercentage(95 + Math.random() * 4.9);
     }, 500);
   };
 
@@ -153,25 +172,53 @@ export function NeuralProfileManager({
               </div>
             </div>
 
-            {/* Match Percentage */}
+            {/* Real-time Match Percentage with Animation */}
             {matchPercentage && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="p-3 rounded-lg bg-primary/5 border border-primary/20"
+                className="p-3 rounded-lg bg-primary/5 border border-primary/20 relative overflow-hidden"
               >
+                {/* Real-time matching indicator */}
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  <motion.div
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <Activity className="w-3 h-3 text-primary" />
+                  </motion.div>
+                  <span className="text-[10px] font-mono text-primary">LIVE</span>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-primary" />
+                    <motion.div
+                      key={matchPulse}
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <ShieldCheck className="w-5 h-5 text-primary" />
+                    </motion.div>
                     <span className="text-sm font-mono">Matched to Profile:</span>
                   </div>
                   <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    key={matchPercentage}
+                    initial={{ opacity: 0.5, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     className="text-xl font-bold font-mono text-primary text-glow"
                   >
                     {matchPercentage.toFixed(1)}%
                   </motion.span>
+                </div>
+
+                {/* Match progress bar */}
+                <div className="mt-2 h-1 bg-muted/30 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${matchPercentage}%` }}
+                    transition={{ type: 'spring', damping: 20 }}
+                  />
                 </div>
               </motion.div>
             )}

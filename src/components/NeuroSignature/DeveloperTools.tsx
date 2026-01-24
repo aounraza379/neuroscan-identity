@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, ChevronDown, ChevronUp, Bot, Scan } from 'lucide-react';
+import { Settings, ChevronDown, ChevronUp, Bot, Scan, Hand } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,12 +9,16 @@ interface DeveloperToolsProps {
   onSimulateBot: () => void;
   simulateDeepfake: boolean;
   onToggleDeepfake: (value: boolean) => void;
+  simulateRoboticHand: boolean;
+  onToggleRoboticHand: (value: boolean) => void;
 }
 
 export function DeveloperTools({ 
   onSimulateBot, 
   simulateDeepfake, 
-  onToggleDeepfake 
+  onToggleDeepfake,
+  simulateRoboticHand,
+  onToggleRoboticHand
 }: DeveloperToolsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -66,6 +70,26 @@ export function DeveloperTools({
                 </Button>
                 <p className="text-[10px] font-mono text-muted-foreground">
                   Injects perfect mechanical timing (0ms variance) to trigger bot detection.
+                </p>
+              </div>
+              
+              {/* Robotic Hand Toggle */}
+              <div className="space-y-2">
+                <Label className="text-xs font-mono text-muted-foreground">
+                  ROBOTIC HAND SIMULATION
+                </Label>
+                <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border border-border/50">
+                  <div className="flex items-center gap-2">
+                    <Hand className="w-4 h-4 text-warning" />
+                    <span className="text-sm font-mono">Simulate Robotic Hand</span>
+                  </div>
+                  <Switch
+                    checked={simulateRoboticHand}
+                    onCheckedChange={onToggleRoboticHand}
+                  />
+                </div>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  When ON, mouse moves in straight lines and device tilt is set to 0° (static).
                 </p>
               </div>
               

@@ -1,18 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, 
   ArrowUpRight, 
   ArrowDownLeft, 
-  Lock, 
-  Unlock,
   ShieldCheck,
   AlertTriangle,
   Banknote,
-  Building2
+  Building2,
+  Sparkles
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SlideToConfirm } from './SlideToConfirm';
 
 interface Transaction {
   id: string;
@@ -34,6 +33,7 @@ interface BankingDashboardProps {
   isVerified: boolean;
   confidence: number;
   onTransferAttempt: () => void;
+  onBotDetected: () => void;
   isBreached: boolean;
 }
 
@@ -41,30 +41,56 @@ export function BankingDashboard({
   isVerified, 
   confidence, 
   onTransferAttempt,
+  onBotDetected,
   isBreached 
 }: BankingDashboardProps) {
-  const [showTransferBlocked, setShowTransferBlocked] = useState(false);
-  
-  const canTransfer = isVerified && confidence >= 85 && !isBreached;
+  const [showTransferSuccess, setShowTransferSuccess] = useState(false);
   const accountBalance = 12415.18;
 
-  const handleTransferClick = () => {
-    if (!canTransfer) {
-      setShowTransferBlocked(true);
-      setTimeout(() => setShowTransferBlocked(false), 3000);
-    } else {
-      onTransferAttempt();
-    }
+  const handleTransferConfirmed = () => {
+    setShowTransferSuccess(true);
+    setTimeout(() => setShowTransferSuccess(false), 3000);
+    onTransferAttempt();
   };
+
+  // Blur effect when breached
+  const contentClass = isBreached ? 'blur-md pointer-events-none select-none' : '';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
-      className="w-full max-w-4xl mx-auto mt-8"
+      className="w-full max-w-4xl mx-auto mt-8 relative"
     >
-      <Card className="glassmorphism border-border/50">
+      {/* Security Lockdown Overlay */}
+      <AnimatePresence>
+        {isBreached && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg"
+          >
+            <div className="text-center p-6">
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 0.5, repeat: Infinity }}
+              >
+                <AlertTriangle className="w-16 h-16 text-destructive mx-auto mb-4" />
+              </motion.div>
+              <h3 className="text-xl font-mono font-bold text-destructive mb-2">
+                SECURITY LOCKDOWN
+              </h3>
+              <p className="text-sm font-mono text-muted-foreground">
+                Bot activity detected. Banking functions disabled.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Card className={`glassmorphism border-border/50 ${contentClass}`}>
         <CardHeader className="border-b border-border/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -101,61 +127,45 @@ export function BankingDashboard({
             </div>
           </motion.div>
 
-          {/* Transfer Button Area */}
-          <div className="relative">
-            <AnimatePresence>
-              {showTransferBlocked && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute -top-2 left-0 right-0 p-3 rounded-lg bg-destructive/20 border border-destructive/50 text-center"
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <span className="text-sm font-mono text-destructive">
-                      Transaction Blocked: Identity Pattern Mismatch ({Math.round(confidence)}% &lt; 85%)
-                    </span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* Transfer Success Message */}
+          <AnimatePresence>
+            {showTransferSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-3 rounded-lg bg-primary/20 border border-primary/50 text-center"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-mono text-primary">
+                    Transfer Initiated Successfully! Neural signature verified.
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-            <Button
-              onClick={handleTransferClick}
-              disabled={isBreached}
-              className={`w-full h-14 font-mono text-lg transition-all duration-300 ${
-                canTransfer 
-                  ? 'bg-primary hover:bg-primary/90 text-primary-foreground cyber-glow' 
-                  : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
-              }`}
-            >
-              {canTransfer ? (
-                <>
-                  <Unlock className="w-5 h-5 mr-2" />
-                  TRANSFER FUNDS
-                </>
-              ) : (
-                <>
-                  <Lock className="w-5 h-5 mr-2" />
-                  {isBreached 
-                    ? 'ACCOUNT LOCKED - BREACH DETECTED' 
-                    : 'COMPLETE NEURAL VERIFICATION TO UNLOCK'
-                  }
-                </>
-              )}
-            </Button>
+          {/* Slide to Confirm Transfer */}
+          <SlideToConfirm
+            onConfirm={handleTransferConfirmed}
+            onBotDetected={onBotDetected}
+            disabled={isBreached}
+            isVerified={isVerified && confidence >= 85}
+          />
 
-            {!isBreached && (
-              <div className="mt-2 flex items-center justify-center gap-2 text-xs font-mono text-muted-foreground">
+          {/* Verification Status */}
+          <div className="flex items-center justify-center gap-2 text-xs font-mono">
+            {isVerified && confidence >= 85 ? (
+              <span className="text-primary flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3" />
-                <span>
-                  {canTransfer 
-                    ? `Neural signature verified (${Math.round(confidence)}% confidence)` 
-                    : `Requires 85%+ confidence (Current: ${Math.round(confidence)}%)`
-                  }
-                </span>
-              </div>
+                Neural signature verified ({Math.round(confidence)}% confidence)
+              </span>
+            ) : (
+              <span className="text-muted-foreground flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                Requires 85%+ confidence (Current: {Math.round(confidence)}%)
+              </span>
             )}
           </div>
 
