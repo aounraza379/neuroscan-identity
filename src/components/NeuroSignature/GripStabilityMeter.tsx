@@ -1,57 +1,70 @@
 import { motion } from 'framer-motion';
-import { Smartphone, AlertTriangle, Hand } from 'lucide-react';
+import { Smartphone, AlertTriangle, Hand, CheckCircle } from 'lucide-react';
 
 interface GripStabilityMeterProps {
   gripStability: number;
   isStaticDevice: boolean;
   isSupported: boolean;
   tiltData: { alpha: number; beta: number; gamma: number };
+  staticDuration?: number;
 }
 
 export function GripStabilityMeter({ 
   gripStability, 
   isStaticDevice, 
   isSupported,
-  tiltData 
+  tiltData,
+  staticDuration = 0
 }: GripStabilityMeterProps) {
   const getStabilityStatus = () => {
+    // Only flag as attack if truly static for 3+ seconds
     if (isStaticDevice) {
       return {
         label: 'STATIC ATTACK',
         color: 'text-destructive',
         bg: 'bg-destructive/20',
         border: 'border-destructive/50',
-        description: 'Device is completely static - Bot detected!',
+        description: `Device frozen for ${staticDuration.toFixed(1)}s - Bot detected!`,
+        icon: AlertTriangle,
       };
     }
-    if (gripStability > 95) {
+    
+    // Perfect 100% stability is suspicious, but only after 3 seconds
+    if (gripStability >= 100 && staticDuration >= 3) {
       return {
         label: 'SUSPICIOUS',
         color: 'text-warning',
         bg: 'bg-warning/20',
         border: 'border-warning/50',
-        description: 'Unnaturally stable grip detected',
+        description: 'Unnaturally stable - analyzing...',
+        icon: AlertTriangle,
       };
     }
-    if (gripStability > 70) {
+    
+    // Normal human range - any micro-movement is good
+    if (gripStability >= 50) {
       return {
-        label: 'STABLE',
+        label: 'SECURE',
         color: 'text-primary',
         bg: 'bg-primary/20',
         border: 'border-primary/50',
-        description: 'Natural human grip pattern',
+        description: 'Natural human grip pattern detected',
+        icon: CheckCircle,
       };
     }
+    
     return {
       label: 'ACTIVE',
       color: 'text-primary',
       bg: 'bg-primary/20',
       border: 'border-primary/50',
       description: 'Normal device movement',
+      icon: Hand,
     };
   };
 
   const status = getStabilityStatus();
+  const StatusIcon = status.icon;
 
   if (!isSupported) {
     return (
@@ -90,15 +103,15 @@ export function GripStabilityMeter({
         <motion.div
           className={`absolute inset-y-0 left-0 rounded-full ${
             isStaticDevice ? 'bg-destructive' : 
-            gripStability > 95 ? 'bg-warning' : 'bg-primary'
+            gripStability >= 100 && staticDuration >= 3 ? 'bg-warning' : 'bg-primary'
           }`}
           initial={{ width: 0 }}
-          animate={{ width: `${gripStability}%` }}
+          animate={{ width: `${Math.min(100, gripStability)}%` }}
           transition={{ type: 'spring', damping: 20 }}
         />
         
-        {/* Danger zone marker */}
-        <div className="absolute inset-y-0 right-0 w-[5%] bg-destructive/30" />
+        {/* Danger zone marker (only at 100%) */}
+        <div className="absolute inset-y-0 right-0 w-[2%] bg-destructive/30" />
       </div>
 
       {/* Tilt Data */}
@@ -117,10 +130,10 @@ export function GripStabilityMeter({
         </div>
       </div>
 
-      <p className={`text-[10px] font-mono ${status.color}`}>
-        {isStaticDevice && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-        {status.description}
-      </p>
+      <div className={`flex items-center gap-1 text-[10px] font-mono ${status.color}`}>
+        <StatusIcon className="w-3 h-3" />
+        <span>{status.description}</span>
+      </div>
     </motion.div>
   );
 }

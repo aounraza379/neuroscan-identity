@@ -5,9 +5,10 @@ interface HMOGData {
   beta: number;  // X-axis rotation (-180 to 180)
   gamma: number; // Y-axis rotation (-90 to 90)
   tiltHistory: number[];
-  gripStability: number; // 0-100, lower is more stable
-  isStaticDevice: boolean; // True if completely static (bot indicator)
+  gripStability: number; // 0-100, higher = more stable
+  isStaticDevice: boolean; // True if completely static for 3+ seconds (bot indicator)
   isSupported: boolean;
+  staticDuration: number; // How long the device has been static (in seconds)
 }
 
 export function useHMOG() {
@@ -19,11 +20,13 @@ export function useHMOG() {
     gripStability: 50,
     isStaticDevice: false,
     isSupported: false,
+    staticDuration: 0,
   });
 
   const [simulateRoboticHand, setSimulateRoboticHand] = useState(false);
   const lastOrientation = useRef({ alpha: 0, beta: 0, gamma: 0 });
-  const staticCounter = useRef(0);
+  const staticStartTime = useRef<number | null>(null);
+  const hasAnyMovement = useRef(false);
 
   const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
     if (simulateRoboticHand) return; // Don't process real data in simulation mode
@@ -41,24 +44,41 @@ export function useHMOG() {
     
     lastOrientation.current = { alpha, beta, gamma };
 
-    // Check for static device (bot indicator)
-    if (totalDelta < 0.01) {
-      staticCounter.current += 1;
-    } else {
-      staticCounter.current = Math.max(0, staticCounter.current - 1);
+    // NEW LOGIC: Only flag as static if 100% frozen for 3+ seconds
+    const isCurrentlyStatic = totalDelta < 0.001; // Truly zero movement
+    
+    if (isCurrentlyStatic && !hasAnyMovement.current) {
+      // Device has never moved - could be desktop or mounted device
+      // Don't flag as suspicious until we've waited 3 seconds
+      if (staticStartTime.current === null) {
+        staticStartTime.current = Date.now();
+      }
+    } else if (!isCurrentlyStatic) {
+      // Any movement detected - this is human
+      hasAnyMovement.current = true;
+      staticStartTime.current = null;
     }
 
-    const isStatic = staticCounter.current > 50; // 50 consecutive static readings
+    const staticDurationMs = staticStartTime.current 
+      ? Date.now() - staticStartTime.current 
+      : 0;
+    const staticDurationSec = staticDurationMs / 1000;
+    
+    // Only flag as bot if truly static for 3+ seconds
+    const isStatic = staticDurationSec >= 3;
 
     setData(prev => {
       const newHistory = [...prev.tiltHistory, totalDelta].slice(-30);
       
-      // Calculate grip stability (variance in tilt changes)
+      // Calculate grip stability based on variance
       const avgTilt = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
       const variance = newHistory.reduce((sum, val) => sum + Math.pow(val - avgTilt, 2), 0) / newHistory.length;
       
-      // Lower variance = more stable grip (0-100 scale, inverted so higher = more stable)
-      const stability = Math.max(0, Math.min(100, 100 - variance * 10));
+      // Higher stability value = more stable grip (0-100 scale)
+      // Any micro-movement shows human grip
+      const stability = totalDelta > 0.01 
+        ? Math.max(50, Math.min(95, 80 - variance * 5)) // Human range: 50-95
+        : 100; // Perfectly still = suspicious
 
       return {
         alpha,
@@ -68,6 +88,7 @@ export function useHMOG() {
         gripStability: stability,
         isStaticDevice: isStatic,
         isSupported: true,
+        staticDuration: staticDurationSec,
       };
     });
   }, [simulateRoboticHand]);
@@ -76,7 +97,12 @@ export function useHMOG() {
   useEffect(() => {
     if (!simulateRoboticHand) return;
 
+    // Immediately start counting static time
+    const startTime = Date.now();
+    
     const interval = setInterval(() => {
+      const staticDurationSec = (Date.now() - startTime) / 1000;
+      
       setData(prev => ({
         ...prev,
         alpha: 0,
@@ -84,8 +110,9 @@ export function useHMOG() {
         gamma: 0,
         tiltHistory: [...prev.tiltHistory, 0].slice(-30),
         gripStability: 100, // Perfectly stable (suspicious!)
-        isStaticDevice: true,
+        isStaticDevice: staticDurationSec >= 3, // Flag after 3 seconds
         isSupported: true,
+        staticDuration: staticDurationSec,
       }));
     }, 100);
 
@@ -134,8 +161,10 @@ export function useHMOG() {
       gripStability: 50,
       isStaticDevice: false,
       isSupported: data.isSupported,
+      staticDuration: 0,
     });
-    staticCounter.current = 0;
+    staticStartTime.current = null;
+    hasAnyMovement.current = false;
     setSimulateRoboticHand(false);
   }, [data.isSupported]);
 

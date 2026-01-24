@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { MousePointer2, Target, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,19 +16,55 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
   const [isTracing, setIsTracing] = useState(false);
   const [isSimulatingBot, setIsSimulatingBot] = useState(false);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  // Use pointer events for both mouse and touch
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!containerRef.current || !isTracing || isSimulatingBot) return;
     
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
+    // Check if within bounds (with 20px tolerance for mobile)
+    const tolerance = e.pointerType === 'touch' ? 20 : 5;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const targetRadius = 48; // Target circle radius (w-24 = 96px / 2)
+    
+    // Distance from center
+    const distFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+    
+    // Check if within tolerance of the circle path
+    const isOnPath = Math.abs(distFromCenter - targetRadius) <= tolerance;
+    
     onMouseMove(x, y);
-    setPath(prev => [...prev, { x, y }].slice(-100));
-  }, [onMouseMove, isTracing, isSimulatingBot]);
+    
+    // Only add to visual path if on or near the target
+    if (isOnPath || path.length > 0) {
+      setPath(prev => [...prev, { x, y }].slice(-100));
+    }
+  }, [onMouseMove, isTracing, isSimulatingBot, path.length]);
 
-  const handleMouseEnter = () => !isSimulatingBot && setIsTracing(true);
-  const handleMouseLeave = () => !isSimulatingBot && setIsTracing(false);
+  const handlePointerEnter = () => {
+    if (!isSimulatingBot) {
+      setIsTracing(true);
+    }
+  };
+  
+  const handlePointerLeave = () => {
+    if (!isSimulatingBot) {
+      setIsTracing(false);
+    }
+  };
+
+  // Touch-specific handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent scrolling while tracing
+    setIsTracing(true);
+  };
+
+  const handleTouchEnd = () => {
+    setIsTracing(false);
+  };
 
   // Simulate perfect bot circle
   const simulateBotCircle = useCallback(() => {
@@ -87,12 +123,15 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
         
         <div
           ref={containerRef}
-          onMouseMove={handleMouseMove}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          className={`relative w-full h-40 bg-background/30 rounded-lg border overflow-hidden cursor-crosshair ${
+          onPointerMove={handlePointerMove}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className={`relative w-full h-40 bg-background/30 rounded-lg border overflow-hidden cursor-crosshair touch-none ${
             isPerfectCircle ? 'border-destructive/50' : 'border-border/50'
           }`}
+          style={{ touchAction: 'none' }} // Prevent browser gestures
         >
           {/* Target circle */}
           <div className="absolute inset-0 flex items-center justify-center">
@@ -114,7 +153,7 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
                 d={`M ${path.map(p => `${p.x},${p.y}`).join(' L ')}`}
                 fill="none"
                 stroke={isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
-                strokeWidth="2"
+                strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 initial={{ pathLength: 0 }}
@@ -129,11 +168,11 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
           {/* Cursor indicator */}
           {path.length > 0 && (
             <motion.div
-              className={`absolute w-3 h-3 rounded-full ${isPerfectCircle ? 'bg-destructive' : 'bg-primary'}`}
+              className={`absolute w-4 h-4 rounded-full ${isPerfectCircle ? 'bg-destructive' : 'bg-primary'}`}
               style={{
-                left: path[path.length - 1].x - 6,
-                top: path[path.length - 1].y - 6,
-                boxShadow: `0 0 10px ${isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}`,
+                left: path[path.length - 1].x - 8,
+                top: path[path.length - 1].y - 8,
+                boxShadow: `0 0 12px ${isPerfectCircle ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}`,
               }}
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 0.5, repeat: Infinity }}
@@ -156,7 +195,7 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
           {!isTracing && !isSimulatingBot && path.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-xs text-muted-foreground font-mono bg-background/80 px-2 py-1 rounded">
-                HOVER TO BEGIN TRACING
+                TAP & DRAG TO TRACE
               </span>
             </div>
           )}

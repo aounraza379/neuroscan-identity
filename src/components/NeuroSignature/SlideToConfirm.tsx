@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
-import { ArrowRight, Check, AlertTriangle, Lock, Fingerprint } from 'lucide-react';
+import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Check, AlertTriangle, Lock, Fingerprint, Loader2 } from 'lucide-react';
+import { TransactionReceipt } from './TransactionReceipt';
 
 interface SlideToConfirmProps {
   onConfirm: () => void;
   onBotDetected: () => void;
   disabled?: boolean;
   isVerified: boolean;
+  confidence: number;
 }
 
 interface SlideMetrics {
@@ -19,12 +21,15 @@ export function SlideToConfirm({
   onConfirm, 
   onBotDetected, 
   disabled = false,
-  isVerified 
+  isVerified,
+  confidence
 }: SlideToConfirmProps) {
   const [isSliding, setIsSliding] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isBotDetected, setIsBotDetected] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [sessionData, setSessionData] = useState({ sessionId: '', timestamp: '' });
   
   const containerRef = useRef<HTMLDivElement>(null);
   const metricsRef = useRef<SlideMetrics>({ velocities: [], positions: [], timestamps: [] });
@@ -34,6 +39,15 @@ export function SlideToConfirm({
   const x = useMotionValue(0);
   const progress = useTransform(x, [0, 240], [0, 100]);
   const bgOpacity = useTransform(x, [0, 240], [0.3, 1]);
+
+  const generateSessionId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'NS-';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
 
   const analyzeSlide = useCallback((metrics: SlideMetrics): boolean => {
     if (metrics.velocities.length < 5) return true; // Not enough data, assume human
@@ -53,7 +67,7 @@ export function SlideToConfirm({
       (sum, d) => sum + Math.pow(d - avgDelta, 2), 0
     ) / positionDeltas.length;
 
-    // Bot detection: Zero velocity variance OR zero position delta variance
+    // Bot detection: Zero velocity variance AND zero position delta variance
     const isPerfectVelocity = velocityVariance < 0.1;
     const isPerfectLine = deltaVariance < 0.001;
     
@@ -104,12 +118,27 @@ export function SlideToConfirm({
       const isHuman = analyzeSlide(metricsRef.current);
       
       if (isHuman) {
-        setIsComplete(true);
-        setShowSuccess(true);
+        setIsAnalyzing(true);
         animate(x, 240, { type: 'spring', stiffness: 500, damping: 30 });
+        
+        // Show analyzing state for 1.5 seconds
         setTimeout(() => {
-          onConfirm();
-        }, 500);
+          setIsAnalyzing(false);
+          setIsComplete(true);
+          
+          // Generate session data
+          const now = new Date();
+          setSessionData({
+            sessionId: generateSessionId(),
+            timestamp: now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+          });
+          
+          // Show receipt after brief delay
+          setTimeout(() => {
+            setShowReceipt(true);
+            onConfirm();
+          }, 500);
+        }, 1500);
       } else {
         setIsBotDetected(true);
         animate(x, 0, { type: 'spring', stiffness: 500, damping: 30 });
@@ -120,10 +149,39 @@ export function SlideToConfirm({
     }
   };
 
+  const handleCloseReceipt = () => {
+    setShowReceipt(false);
+    // Reset for next transaction
+    setTimeout(() => {
+      setIsComplete(false);
+      animate(x, 0, { type: 'spring', stiffness: 500, damping: 30 });
+    }, 300);
+  };
+
   const isDisabledState = disabled || !isVerified;
 
   return (
     <div className="space-y-2">
+      {/* Receipt Modal */}
+      <AnimatePresence>
+        {showReceipt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+          >
+            <TransactionReceipt
+              sessionId={sessionData.sessionId}
+              timestamp={sessionData.timestamp}
+              confidence={Math.round(confidence)}
+              amount="$500.00"
+              onClose={handleCloseReceipt}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div 
         ref={containerRef}
         className={`relative h-16 rounded-xl overflow-hidden transition-all duration-300 ${
@@ -131,9 +189,11 @@ export function SlideToConfirm({
             ? 'bg-destructive/20 border-2 border-destructive' 
             : isComplete
               ? 'bg-primary/20 border-2 border-primary'
-              : isDisabledState
-                ? 'bg-muted/30 border-2 border-muted cursor-not-allowed'
-                : 'bg-muted/50 border-2 border-border hover:border-primary/50'
+              : isAnalyzing
+                ? 'bg-primary/10 border-2 border-primary/50'
+                : isDisabledState
+                  ? 'bg-muted/30 border-2 border-muted cursor-not-allowed'
+                  : 'bg-muted/50 border-2 border-border hover:border-primary/50'
         }`}
       >
         {/* Progress Background */}
@@ -146,7 +206,16 @@ export function SlideToConfirm({
 
         {/* Track Text */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          {isComplete ? (
+          {isAnalyzing ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 text-primary font-mono"
+            >
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Analyzing Neural Signature...</span>
+            </motion.div>
+          ) : isComplete ? (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -177,7 +246,7 @@ export function SlideToConfirm({
         </div>
 
         {/* Draggable Thumb */}
-        {!isComplete && !isBotDetected && (
+        {!isComplete && !isBotDetected && !isAnalyzing && (
           <motion.div
             drag={isDisabledState ? false : "x"}
             dragConstraints={{ left: 0, right: 240 }}
@@ -203,13 +272,19 @@ export function SlideToConfirm({
         )}
 
         {/* Success Check */}
-        {isComplete && (
+        {(isComplete || isAnalyzing) && (
           <motion.div
             initial={{ scale: 0, x: 240 }}
             animate={{ scale: 1 }}
-            className="absolute right-1 top-1 bottom-1 w-14 rounded-lg bg-primary flex items-center justify-center"
+            className={`absolute right-1 top-1 bottom-1 w-14 rounded-lg flex items-center justify-center ${
+              isAnalyzing ? 'bg-primary/50' : 'bg-primary'
+            }`}
           >
-            <Check className="w-6 h-6 text-primary-foreground" />
+            {isAnalyzing ? (
+              <Loader2 className="w-6 h-6 text-primary-foreground animate-spin" />
+            ) : (
+              <Check className="w-6 h-6 text-primary-foreground" />
+            )}
           </motion.div>
         )}
       </div>
