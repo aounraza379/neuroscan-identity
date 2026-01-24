@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface BiometricData {
   dwellTimes: number[];
@@ -13,6 +13,10 @@ export interface BiometricData {
   jitter: number;
   isBotMode: boolean;
   isBreached: boolean;
+  // New: Progressive confidence tracking
+  movementScore: number;
+  keystrokeScore: number;
+  lastMovementTime: number;
 }
 
 export interface BiometricResult {
@@ -35,12 +39,43 @@ export function useBiometricTracker() {
     jitter: 0,
     isBotMode: false,
     isBreached: false,
+    movementScore: 0,
+    keystrokeScore: 0,
+    lastMovementTime: 0,
   });
 
   const keyDownTime = useRef<number>(0);
   const lastKeyUpTime = useRef<number>(0);
   const waveformIndex = useRef<number>(0);
   const lastTextLength = useRef<number>(0);
+  const movementIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Progressive movement scoring - every 1 second of non-robotic movement adds +10%
+  useEffect(() => {
+    movementIntervalRef.current = setInterval(() => {
+      setData(prev => {
+        if (prev.isBotMode || prev.isBreached) return prev;
+        
+        const now = Date.now();
+        const timeSinceLastMovement = now - prev.lastMovementTime;
+        
+        // Only add score if there was recent movement (within last 1.5 seconds)
+        // and mouse variance indicates human-like movement (> 1px variance)
+        if (timeSinceLastMovement < 1500 && prev.mouseVariance > 1) {
+          const newMovementScore = Math.min(50, prev.movementScore + 10);
+          return { ...prev, movementScore: newMovementScore };
+        }
+        return prev;
+      });
+    }, 1000);
+
+    return () => {
+      if (movementIntervalRef.current) {
+        clearInterval(movementIntervalRef.current);
+      }
+    };
+  }, []);
 
   const calculateVariance = (values: number[]): number => {
     if (values.length < 2) return 0;
@@ -94,6 +129,8 @@ export function useBiometricTracker() {
     lastKeyUpTime.current = now;
 
     setData(prev => {
+      if (prev.isBotMode || prev.isBreached) return prev;
+      
       const newDwellTimes = [...prev.dwellTimes, dwellTime];
       const newFlightTimes = flightTime > 0 ? [...prev.flightTimes, flightTime] : prev.flightTimes;
       
@@ -115,6 +152,12 @@ export function useBiometricTracker() {
         }
       ].slice(-50);
 
+      // Add keystroke score: +5% per natural keystroke (max 50%)
+      const hasNaturalVariance = timingVar > 5;
+      const newKeystrokeScore = hasNaturalVariance 
+        ? Math.min(50, prev.keystrokeScore + 5) 
+        : prev.keystrokeScore;
+
       return {
         ...prev,
         dwellTimes: newDwellTimes,
@@ -125,6 +168,7 @@ export function useBiometricTracker() {
         neuralWaveform: newWaveform,
         latency: Math.round(dwellTime),
         jitter: Math.round(timingVar),
+        keystrokeScore: newKeystrokeScore,
       };
     });
   }, []);
@@ -141,7 +185,16 @@ export function useBiometricTracker() {
   const handleMouseMove = useCallback((x: number, y: number) => {
     const now = performance.now();
     
+    // Check if this is actual movement (not just the same position)
+    const lastPos = lastPositionRef.current;
+    if (lastPos && Math.abs(x - lastPos.x) < 1 && Math.abs(y - lastPos.y) < 1) {
+      return; // Ignore micro-movements
+    }
+    lastPositionRef.current = { x, y };
+    
     setData(prev => {
+      if (prev.isBotMode || prev.isBreached) return prev;
+      
       const newPositions = [...prev.mousePositions, { x, y, time: now }].slice(-100);
       const mouseVar = calculateCircleVariance(newPositions);
       
@@ -160,6 +213,7 @@ export function useBiometricTracker() {
         mouseVariance: mouseVar,
         neuralWaveform: newWaveform,
         jitter: Math.round(mouseVar),
+        lastMovementTime: Date.now(),
       };
     });
   }, []);
@@ -205,11 +259,24 @@ export function useBiometricTracker() {
       jitter: 0,
       isBotMode: true,
       isBreached: true,
+      movementScore: 0,
+      keystrokeScore: 0,
+      lastMovementTime: 0,
     });
   }, []);
 
   const analyzeResult = useCallback((): BiometricResult => {
-    const { timingVariance, mouseVariance, dwellTimes, flightTimes, isBotMode, isBreached } = data;
+    const { 
+      timingVariance, 
+      mouseVariance, 
+      dwellTimes, 
+      flightTimes, 
+      isBotMode, 
+      isBreached,
+      movementScore,
+      keystrokeScore,
+      mousePositions
+    } = data;
     
     // If bot mode was triggered, return immediate failure
     if (isBotMode || isBreached) {
@@ -230,7 +297,7 @@ export function useBiometricTracker() {
     }
     
     // Check for perfect circle (variance < 1px)
-    if (mouseVariance < 1 && data.mousePositions.length > 20) {
+    if (mouseVariance < 1 && mousePositions.length > 20) {
       return {
         isHuman: false,
         confidence: 3,
@@ -247,30 +314,34 @@ export function useBiometricTracker() {
       };
     }
     
-    // Check for human-like patterns (natural variation > 10ms)
-    if (timingVariance > 10 && dwellTimes.length > 5) {
-      const confidence = Math.min(98, 70 + timingVariance + mouseVariance * 0.5);
+    // PROGRESSIVE CONFIDENCE: Start at 50%, add movement + keystroke scores
+    const baseConfidence = 50;
+    const totalScore = movementScore + keystrokeScore;
+    const confidence = Math.min(98, baseConfidence + totalScore);
+    
+    // Quick boost if we have good variance indicators
+    const hasNaturalMovement = mouseVariance > 5 && mousePositions.length > 10;
+    const hasNaturalTyping = timingVariance > 10 && dwellTimes.length > 3;
+    
+    let bonusConfidence = 0;
+    if (hasNaturalMovement) bonusConfidence += 10;
+    if (hasNaturalTyping) bonusConfidence += 10;
+    
+    const finalConfidence = Math.min(98, confidence + bonusConfidence);
+    
+    if (finalConfidence >= 85) {
       return {
         isHuman: true,
-        confidence,
+        confidence: finalConfidence,
         reason: 'HUMAN VERIFIED: Natural CNS timing variance and motor jitter confirmed.',
       };
     }
     
-    // Intermediate state - still analyzing
-    if (dwellTimes.length <= 5) {
-      return {
-        isHuman: true,
-        confidence: 50 + dwellTimes.length * 5,
-        reason: 'Analyzing biometric signature...',
-      };
-    }
-    
-    // Suspicious but not conclusive
+    // Still analyzing
     return {
       isHuman: true,
-      confidence: 60 + timingVariance * 2,
-      reason: 'Moderate timing variance detected: continuing analysis...',
+      confidence: finalConfidence,
+      reason: `Analyzing biometric signature... (${Math.round(finalConfidence)}%)`,
     };
   }, [data]);
 
@@ -288,11 +359,15 @@ export function useBiometricTracker() {
       jitter: 0,
       isBotMode: false,
       isBreached: false,
+      movementScore: 0,
+      keystrokeScore: 0,
+      lastMovementTime: 0,
     });
     keyDownTime.current = 0;
     lastKeyUpTime.current = 0;
     waveformIndex.current = 0;
     lastTextLength.current = 0;
+    lastPositionRef.current = null;
   }, []);
 
   return {

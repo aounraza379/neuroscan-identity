@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Fingerprint, 
@@ -8,7 +8,8 @@ import {
   Cpu,
   Database,
   ShieldCheck,
-  Activity
+  Activity,
+  Zap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -27,6 +28,7 @@ interface NeuralProfileManagerProps {
   timingVariance: number;
   mouseVariance: number;
   isVerified: boolean;
+  confidence?: number;
 }
 
 export function NeuralProfileManager({
@@ -35,18 +37,28 @@ export function NeuralProfileManager({
   timingVariance,
   mouseVariance,
   isVerified,
+  confidence = 0,
 }: NeuralProfileManagerProps) {
   const [savedProfile, setSavedProfile] = useState<NeuralProfile | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [matchPercentage, setMatchPercentage] = useState<number | null>(null);
-  const [isMatching, setIsMatching] = useState(false);
   const [matchPulse, setMatchPulse] = useState(0);
+  const [autoSaveTriggered, setAutoSaveTriggered] = useState(false);
+  const hasAutoSaved = useRef(false);
+
+  // AUTO-SAVE: Automatically save profile when confidence reaches 90%
+  useEffect(() => {
+    if (confidence >= 90 && !savedProfile && !isSaving && !hasAutoSaved.current) {
+      hasAutoSaved.current = true;
+      setAutoSaveTriggered(true);
+      handleSaveProfile(true);
+    }
+  }, [confidence, savedProfile, isSaving]);
 
   // Real-time matching animation when profile is saved
   useEffect(() => {
     if (!savedProfile || !isVerified) return;
 
-    setIsMatching(true);
     const interval = setInterval(() => {
       // Simulate real-time matching with slight variations
       const baseMatch = 95 + Math.random() * 4.5;
@@ -58,11 +70,11 @@ export function NeuralProfileManager({
     return () => clearInterval(interval);
   }, [savedProfile, isVerified]);
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = async (isAutoSave = false) => {
     setIsSaving(true);
     
-    // Simulate encryption delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Simulate encryption delay (shorter for auto-save)
+    await new Promise(resolve => setTimeout(resolve, isAutoSave ? 800 : 1500));
     
     const newProfile: NeuralProfile = {
       id: `NP-${Date.now().toString(36).toUpperCase()}`,
@@ -94,7 +106,7 @@ export function NeuralProfileManager({
       </div>
 
       <AnimatePresence mode="wait">
-        {!savedProfile ? (
+        {!savedProfile && !isSaving ? (
           <motion.div
             key="save"
             initial={{ opacity: 0 }}
@@ -103,32 +115,64 @@ export function NeuralProfileManager({
             className="space-y-4"
           >
             <p className="text-xs text-muted-foreground">
-              Save your unique neural signature for instant verification on future sessions.
+              {confidence >= 90 
+                ? 'Auto-enrolling neural signature...'
+                : 'Profile auto-saves at 90% confidence.'
+              }
             </p>
             
+            {/* Progress to auto-save */}
+            {confidence < 90 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
+                  <span>Auto-save progress</span>
+                  <span>{Math.round(confidence)}% / 90%</span>
+                </div>
+                <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary/60 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (confidence / 90) * 100)}%` }}
+                    transition={{ type: 'spring', damping: 20 }}
+                  />
+                </div>
+              </div>
+            )}
+            
             <Button
-              onClick={handleSaveProfile}
+              onClick={() => handleSaveProfile(false)}
               disabled={!isVerified || isSaving}
               className="w-full font-mono"
               variant={isVerified ? "default" : "secondary"}
             >
-              {isSaving ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Cpu className="w-4 h-4 mr-2" />
-                  </motion.div>
-                  ENCRYPTING NEURAL HASH...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isVerified ? 'SAVE MY NEURAL PROFILE' : 'VERIFY IDENTITY FIRST'}
-                </>
-              )}
+              <Save className="w-4 h-4 mr-2" />
+              {isVerified ? 'SAVE NOW' : 'VERIFY IDENTITY FIRST'}
             </Button>
+          </motion.div>
+        ) : isSaving ? (
+          <motion.div
+            key="saving"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="py-6 text-center"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="inline-block mb-3"
+            >
+              <Cpu className="w-8 h-8 text-primary" />
+            </motion.div>
+            <p className="text-sm font-mono text-primary">
+              {autoSaveTriggered ? 'AUTO-ENROLLING...' : 'ENCRYPTING NEURAL HASH...'}
+            </p>
+            {autoSaveTriggered && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+                <Zap className="w-3 h-3" />
+                90% confidence reached
+              </p>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -146,7 +190,7 @@ export function NeuralProfileManager({
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="w-4 h-4 text-primary" />
                 <span className="text-sm font-mono text-primary">
-                  Neural Profile Encrypted & Saved
+                  {autoSaveTriggered ? 'Auto-Enrolled Successfully' : 'Neural Profile Saved'}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -161,7 +205,7 @@ export function NeuralProfileManager({
                   <Database className="w-3 h-3" />
                   Profile ID
                 </span>
-                <span className="text-foreground">{savedProfile.id}</span>
+                <span className="text-foreground">{savedProfile?.id}</span>
               </div>
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-muted-foreground flex items-center gap-1">

@@ -218,6 +218,7 @@ export function NeuroSignature() {
             timingVariance={data.timingVariance}
             mouseVariance={data.mouseVariance}
             isVerified={isUnlocked}
+            confidence={result.confidence}
           />
           
           {/* Grip Stability Meter (HMOG) */}
@@ -230,6 +231,7 @@ export function NeuroSignature() {
               beta: hmogData.beta,
               gamma: hmogData.gamma
             }}
+            staticDuration={hmogData.staticDuration}
           />
           
           {/* Developer Tools */}

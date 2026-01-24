@@ -152,6 +152,7 @@ export function BankingDashboard({
             onBotDetected={onBotDetected}
             disabled={isBreached}
             isVerified={isVerified && confidence >= 85}
+            confidence={confidence}
           />
 
           {/* Verification Status */}
