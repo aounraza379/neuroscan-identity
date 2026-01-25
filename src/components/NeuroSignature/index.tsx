@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Cpu, Github, Landmark } from 'lucide-react';
+import { Github, Landmark } from 'lucide-react';
 import { SecurityTerminal } from './SecurityTerminal';
 import { ProjectNarrative } from './ProjectNarrative';
-import { WebcamShield } from './WebcamShield';
+import { LivenessChallenge } from './LivenessChallenge';
 import { DeveloperTools } from './DeveloperTools';
 import { SystemBreachAlert } from './SystemBreachAlert';
 import { BankingDashboard } from './BankingDashboard';
@@ -13,6 +13,7 @@ import { SecurityBreachLock } from './SecurityBreachLock';
 import { ShieldStatus } from './ShieldStatus';
 import { GripStabilityMeter } from './GripStabilityMeter';
 import { SessionIntegrityBadge } from './SessionIntegrityBadge';
+import { SecurityAuditLog } from './SecurityAuditLog';
 import { useBiometricTracker } from '@/hooks/useBiometricTracker';
 import { useHMOG } from '@/hooks/useHMOG';
 
@@ -22,6 +23,7 @@ export function NeuroSignature() {
   const [isPageLocked, setIsPageLocked] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false); // Global unlock state
+  const [livenessVerified, setLivenessVerified] = useState(false);
   
   const { 
     data,
@@ -96,6 +98,17 @@ export function NeuroSignature() {
     triggerBotMode();
   };
 
+  const handleLivenessResult = (passed: boolean) => {
+    setLivenessVerified(passed);
+    if (!passed) {
+      console.log('Liveness check failed - possible deepfake detected');
+    }
+  };
+
+  const handleTransactionComplete = (amount: number) => {
+    console.log(`Transaction completed: $${amount}`);
+  };
+
   const handleFullReset = () => {
     reset();
     resetHMOG();
@@ -103,6 +116,7 @@ export function NeuroSignature() {
     setShowBreachAlert(false);
     setIsVerified(false);
     setIsUnlocked(false);
+    setLivenessVerified(false);
   };
 
   const isBreached = data.isBreached || hmogData.isStaticDevice;
@@ -152,8 +166,11 @@ export function NeuroSignature() {
           </div>
           
           <div className="flex items-center gap-4">
-            {/* Webcam Shield */}
-            <WebcamShield simulateDeepfake={simulateDeepfake} />
+            {/* Liveness Challenge Camera */}
+            <LivenessChallenge 
+              simulateDeepfake={simulateDeepfake} 
+              onLivenessResult={handleLivenessResult}
+            />
             
             <a
               href="https://github.com"
@@ -251,7 +268,18 @@ export function NeuroSignature() {
           onTransferAttempt={handleTransferAttempt}
           onBotDetected={handleSliderBotDetected}
           isBreached={isBreached}
+          onTransactionComplete={handleTransactionComplete}
         />
+
+        {/* Security Audit Log */}
+        <div className="max-w-4xl mx-auto">
+          <SecurityAuditLog
+            confidence={result.confidence}
+            isVerified={isUnlocked}
+            gripStability={hmogData.gripStability}
+            isStaticDevice={hmogData.isStaticDevice}
+          />
+        </div>
         
         <ProjectNarrative />
       </main>

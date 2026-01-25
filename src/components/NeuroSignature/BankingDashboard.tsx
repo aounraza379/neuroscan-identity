@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, 
@@ -8,7 +8,8 @@ import {
   AlertTriangle,
   Banknote,
   Building2,
-  Sparkles
+  Sparkles,
+  Send
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SlideToConfirm } from './SlideToConfirm';
@@ -19,14 +20,20 @@ interface Transaction {
   description: string;
   amount: number;
   date: string;
+  isNew?: boolean;
 }
 
-const mockTransactions: Transaction[] = [
+const initialTransactions: Transaction[] = [
   { id: '1', type: 'credit', description: 'Salary Deposit', amount: 5250.00, date: '2024-01-22' },
   { id: '2', type: 'debit', description: 'Rent Payment', amount: -1800.00, date: '2024-01-20' },
   { id: '3', type: 'credit', description: 'Freelance Project', amount: 1200.00, date: '2024-01-18' },
   { id: '4', type: 'debit', description: 'Electric Bill', amount: -145.50, date: '2024-01-15' },
   { id: '5', type: 'debit', description: 'Grocery Store', amount: -89.32, date: '2024-01-14' },
+];
+
+const recipientNames = [
+  'Alex Johnson', 'Sarah Miller', 'Mike Chen', 'Emma Davis', 
+  'James Wilson', 'Lisa Anderson', 'David Brown', 'Maria Garcia'
 ];
 
 interface BankingDashboardProps {
@@ -35,6 +42,7 @@ interface BankingDashboardProps {
   onTransferAttempt: () => void;
   onBotDetected: () => void;
   isBreached: boolean;
+  onTransactionComplete?: (amount: number) => void;
 }
 
 export function BankingDashboard({ 
@@ -42,15 +50,46 @@ export function BankingDashboard({
   confidence, 
   onTransferAttempt,
   onBotDetected,
-  isBreached 
+  isBreached,
+  onTransactionComplete
 }: BankingDashboardProps) {
   const [showTransferSuccess, setShowTransferSuccess] = useState(false);
-  const accountBalance = 12415.18;
+  const [accountBalance, setAccountBalance] = useState(12415.18);
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const transferAmount = 500.00;
 
   const handleTransferConfirmed = () => {
+    // Update balance
+    setAccountBalance(prev => prev - transferAmount);
+    
+    // Add new transaction to history
+    const randomRecipient = recipientNames[Math.floor(Math.random() * recipientNames.length)];
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    
+    const newTransaction: Transaction = {
+      id: `tx-${Date.now()}`,
+      type: 'debit',
+      description: `Transfer to ${randomRecipient}`,
+      amount: -transferAmount,
+      date: dateStr,
+      isNew: true
+    };
+    
+    setTransactions(prev => [newTransaction, ...prev.slice(0, 4)]);
+    
+    // Show success message
     setShowTransferSuccess(true);
     setTimeout(() => setShowTransferSuccess(false), 3000);
+    
+    // Notify parent
     onTransferAttempt();
+    onTransactionComplete?.(transferAmount);
+    
+    // Remove "new" flag after animation
+    setTimeout(() => {
+      setTransactions(prev => prev.map(tx => ({ ...tx, isNew: false })));
+    }, 2000);
   };
 
   // Blur effect when breached
@@ -120,12 +159,28 @@ export function BankingDashboard({
           >
             <p className="text-sm font-mono text-muted-foreground mb-1">Available Balance</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold font-mono text-primary text-glow">
+              <motion.span 
+                key={accountBalance}
+                initial={{ scale: 1.1, color: 'hsl(var(--primary))' }}
+                animate={{ scale: 1 }}
+                className="text-4xl font-bold font-mono text-primary text-glow"
+              >
                 ${accountBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </span>
+              </motion.span>
               <span className="text-sm text-muted-foreground">USD</span>
             </div>
           </motion.div>
+
+          {/* Transfer Amount Preview */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-primary" />
+              <span className="text-sm font-mono text-muted-foreground">Transfer Amount</span>
+            </div>
+            <span className="text-lg font-bold font-mono text-primary">
+              ${transferAmount.toFixed(2)}
+            </span>
+          </div>
 
           {/* Transfer Success Message */}
           <AnimatePresence>
@@ -177,13 +232,15 @@ export function BankingDashboard({
               RECENT TRANSACTIONS
             </h3>
             <div className="space-y-2">
-              {mockTransactions.map((tx, index) => (
+              {transactions.map((tx, index) => (
                 <motion.div
                   key={tx.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/30 hover:border-border/50 transition-colors"
+                  initial={tx.isNew ? { opacity: 0, x: -20, backgroundColor: 'hsl(var(--primary) / 0.2)' } : { opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0, backgroundColor: 'transparent' }}
+                  transition={{ delay: tx.isNew ? 0 : index * 0.1, duration: tx.isNew ? 0.5 : 0.3 }}
+                  className={`flex items-center justify-between p-3 rounded-lg bg-card/50 border transition-colors ${
+                    tx.isNew ? 'border-primary/50 bg-primary/10' : 'border-border/30 hover:border-border/50'
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -197,7 +254,14 @@ export function BankingDashboard({
                       }
                     </div>
                     <div>
-                      <p className="text-sm font-medium">{tx.description}</p>
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        {tx.description}
+                        {tx.isNew && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/20 text-primary">
+                            NEW
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground font-mono">{tx.date}</p>
                     </div>
                   </div>
