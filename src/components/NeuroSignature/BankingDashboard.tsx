@@ -9,10 +9,12 @@ import {
   Banknote,
   Building2,
   Sparkles,
-  Send
+  Send,
+  Lock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SlideToConfirm } from './SlideToConfirm';
+import { useToast } from '@/hooks/use-toast';
 
 interface Transaction {
   id: string;
@@ -53,10 +55,23 @@ export function BankingDashboard({
   isBreached,
   onTransactionComplete
 }: BankingDashboardProps) {
+  const { toast } = useToast();
   const [showTransferSuccess, setShowTransferSuccess] = useState(false);
   const [accountBalance, setAccountBalance] = useState(12415.18);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const transferAmount = 500.00;
+  
+  // Sequential guard: require 85%+ confidence for banking access
+  const isFullyAuthenticated = isVerified && confidence >= 85;
+  const showSequentialLock = !isFullyAuthenticated && !isBreached;
+  
+  const handleLockedClick = () => {
+    toast({
+      variant: "destructive",
+      title: "🔒 Security Protocol Required",
+      description: "Complete Neural Scan to access banking features. Current confidence: " + Math.round(confidence) + "%",
+    });
+  };
 
   const handleTransferConfirmed = () => {
     // Update balance
@@ -92,8 +107,8 @@ export function BankingDashboard({
     }, 2000);
   };
 
-  // Blur effect when breached
-  const contentClass = isBreached ? 'blur-md pointer-events-none select-none' : '';
+  // Blur effect when breached OR not authenticated
+  const contentClass = isBreached || showSequentialLock ? 'blur-md pointer-events-none select-none' : '';
 
   return (
     <motion.div
@@ -101,7 +116,38 @@ export function BankingDashboard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
       className="w-full max-w-4xl mx-auto mt-8 relative"
+      onClick={showSequentialLock ? handleLockedClick : undefined}
     >
+      {/* Sequential Guard Lock Overlay */}
+      <AnimatePresence>
+        {showSequentialLock && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-sm rounded-lg cursor-pointer"
+          >
+            <div className="text-center p-6">
+              <motion.div
+                animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <Lock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+              </motion.div>
+              <h3 className="text-xl font-mono font-bold text-foreground mb-2">
+                NEURAL SCAN REQUIRED
+              </h3>
+              <p className="text-sm font-mono text-muted-foreground mb-2">
+                Complete verification to access banking features.
+              </p>
+              <div className="text-xs font-mono text-primary">
+                Current Confidence: {Math.round(confidence)}% • Required: 85%+
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Security Lockdown Overlay */}
       <AnimatePresence>
         {isBreached && (

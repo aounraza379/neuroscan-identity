@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, ChevronDown, ChevronUp, Bot, Scan, Hand } from 'lucide-react';
+import { Settings, ChevronDown, ChevronUp, Bot, Scan, Hand, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 interface DeveloperToolsProps {
   onSimulateBot: () => void;
+  onSimulateBotTyping?: () => void;
   simulateDeepfake: boolean;
   onToggleDeepfake: (value: boolean) => void;
   simulateRoboticHand: boolean;
@@ -14,7 +15,8 @@ interface DeveloperToolsProps {
 }
 
 export function DeveloperTools({ 
-  onSimulateBot, 
+  onSimulateBot,
+  onSimulateBotTyping,
   simulateDeepfake, 
   onToggleDeepfake,
   simulateRoboticHand,
@@ -58,7 +60,7 @@ export function DeveloperTools({
               {/* Simulate Bot Button */}
               <div className="space-y-2">
                 <Label className="text-xs font-mono text-muted-foreground">
-                  BOT SIMULATION
+                  MOUSE/MOVEMENT BOT
                 </Label>
                 <Button
                   variant="destructive"
@@ -69,7 +71,25 @@ export function DeveloperTools({
                   SIMULATE BOT ATTACK
                 </Button>
                 <p className="text-[10px] font-mono text-muted-foreground">
-                  Injects perfect mechanical timing (0ms variance) to trigger bot detection.
+                  Injects perfect straight-line mouse paths (0% variance) to trigger detection.
+                </p>
+              </div>
+              
+              {/* Simulate Bot Typing Button - Fixed 50ms intervals */}
+              <div className="space-y-2">
+                <Label className="text-xs font-mono text-muted-foreground">
+                  KEYBOARD BOT (50ms)
+                </Label>
+                <Button
+                  variant="destructive"
+                  onClick={onSimulateBotTyping}
+                  className="w-full font-mono text-sm"
+                >
+                  <Keyboard className="w-4 h-4 mr-2" />
+                  SIMULATE BOT TYPING
+                </Button>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  Injects exactly 50ms interval keystrokes. Instant detection on flight time consistency.
                 </p>
               </div>
               

@@ -219,40 +219,58 @@ export function useBiometricTracker() {
   }, []);
 
   // Simulate bot behavior
+  // Simulate bot typing with fixed 50ms intervals
+  const triggerBotTyping = useCallback(() => {
+    // Generate perfectly timed bot typing data - EXACTLY 50ms intervals
+    const perfectFlightTimes = Array(10).fill(50); // Exactly 50ms intervals (bot signature)
+    const perfectDwellTimes = Array(10).fill(50);  // Exactly 50ms dwell
+    
+    setData(prev => ({
+      ...prev,
+      dwellTimes: perfectDwellTimes,
+      flightTimes: perfectFlightTimes,
+      avgDwellTime: 50,
+      avgFlightTime: 50,
+      timingVariance: 0,
+      latency: 50,
+      jitter: 0,
+      isBotMode: true,
+      isBreached: true,
+      movementScore: 0,
+      keystrokeScore: 0,
+    }));
+  }, []);
+
   const triggerBotMode = useCallback(() => {
     waveformIndex.current = 0;
     
-    // Generate perfectly timed bot data
-    const perfectFlightTimes = Array(10).fill(100); // Exactly 100ms intervals
+    // Generate perfectly timed bot data - EXACTLY 50ms intervals for detection
+    const perfectFlightTimes = Array(10).fill(50); // Exactly 50ms intervals
     const perfectDwellTimes = Array(10).fill(50);   // Exactly 50ms dwell
     
-    // Generate perfect circle positions
-    const perfectCircle: { x: number; y: number; time: number }[] = [];
-    const centerX = 100;
-    const centerY = 80;
-    const radius = 40;
+    // Generate perfect straight line positions (not circle - more robotic)
+    const perfectLine: { x: number; y: number; time: number }[] = [];
     for (let i = 0; i < 50; i++) {
-      const angle = (i / 50) * 2 * Math.PI;
-      perfectCircle.push({
-        x: centerX + radius * Math.cos(angle),
-        y: centerY + radius * Math.sin(angle),
+      perfectLine.push({
+        x: 50 + i * 4, // Perfect straight line
+        y: 100,        // Zero vertical movement
         time: i * 20,
       });
     }
     
-    // Generate bot waveform (flat line)
+    // Generate FLAT bot waveform (perfectly horizontal line at 0)
     const botWaveform = Array(50).fill(null).map((_, i) => ({
       time: i,
-      value: 50, // Perfectly flat
+      value: 0, // Perfectly flat at 0 - ZERO JITTER
     }));
 
     setData({
       dwellTimes: perfectDwellTimes,
       flightTimes: perfectFlightTimes,
-      mousePositions: perfectCircle,
-      mouseVariance: 0.1, // Perfect circle = near-zero variance
+      mousePositions: perfectLine,
+      mouseVariance: 0, // Perfect line = exactly zero variance
       avgDwellTime: 50,
-      avgFlightTime: 100,
+      avgFlightTime: 50,
       timingVariance: 0,
       neuralWaveform: botWaveform,
       latency: 50,
@@ -378,6 +396,7 @@ export function useBiometricTracker() {
     handleTextChange,
     analyzeResult,
     triggerBotMode,
+    triggerBotTyping,
     reset,
   };
 }
