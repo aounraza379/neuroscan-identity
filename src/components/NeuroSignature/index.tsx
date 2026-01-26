@@ -14,22 +14,26 @@ import { ShieldStatus } from './ShieldStatus';
 import { GripStabilityMeter } from './GripStabilityMeter';
 import { SessionIntegrityBadge } from './SessionIntegrityBadge';
 import { SecurityAuditLog } from './SecurityAuditLog';
+import { BotAttackOverlay } from './BotAttackOverlay';
 import { useBiometricTracker } from '@/hooks/useBiometricTracker';
 import { useHMOG } from '@/hooks/useHMOG';
 
 export function NeuroSignature() {
+  // SESSION HYGIENE: All state starts fresh on mount - no localStorage persistence
   const [showBreachAlert, setShowBreachAlert] = useState(false);
+  const [showBotOverlay, setShowBotOverlay] = useState(false);
   const [simulateDeepfake, setSimulateDeepfake] = useState(false);
   const [isPageLocked, setIsPageLocked] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState(false); // Global unlock state
+  const [isUnlocked, setIsUnlocked] = useState(false); // Global unlock state - starts FALSE
   const [livenessVerified, setLivenessVerified] = useState(false);
   
   const { 
     data,
     handleMouseMove,
     analyzeResult, 
-    triggerBotMode, 
+    triggerBotMode,
+    triggerBotTyping,
     reset 
   } = useBiometricTracker();
 
@@ -71,9 +75,12 @@ export function NeuroSignature() {
 
   const handleBreachDetected = useCallback(() => {
     setShowBreachAlert(true);
+    setShowBotOverlay(true);
     setTimeout(() => {
       setShowBreachAlert(false);
       setIsPageLocked(true);
+      // Keep bot overlay visible for dramatic effect
+      setTimeout(() => setShowBotOverlay(false), 3000);
     }, 2000);
   }, []);
 
@@ -81,6 +88,11 @@ export function NeuroSignature() {
     triggerBotMode();
     handleBreachDetected();
   }, [triggerBotMode, handleBreachDetected]);
+
+  const handleSimulateBotTyping = useCallback(() => {
+    triggerBotTyping();
+    handleBreachDetected();
+  }, [triggerBotTyping, handleBreachDetected]);
 
   const handleVerificationComplete = useCallback((success: boolean, confidence: number) => {
     if (success && confidence >= 85) {
@@ -114,6 +126,7 @@ export function NeuroSignature() {
     resetHMOG();
     setIsPageLocked(false);
     setShowBreachAlert(false);
+    setShowBotOverlay(false);
     setIsVerified(false);
     setIsUnlocked(false);
     setLivenessVerified(false);
@@ -143,6 +156,9 @@ export function NeuroSignature() {
       
       {/* System Breach Alert Overlay */}
       <SystemBreachAlert isVisible={showBreachAlert} />
+      
+      {/* Bot Attack Visualization Overlay */}
+      <BotAttackOverlay isVisible={showBotOverlay} />
       
       {/* Header */}
       <motion.header
@@ -254,6 +270,7 @@ export function NeuroSignature() {
           {/* Developer Tools */}
           <DeveloperTools
             onSimulateBot={handleSimulateBot}
+            onSimulateBotTyping={handleSimulateBotTyping}
             simulateDeepfake={simulateDeepfake}
             onToggleDeepfake={setSimulateDeepfake}
             simulateRoboticHand={simulateRoboticHand}
