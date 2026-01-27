@@ -28,6 +28,10 @@ export function NeuroSignature() {
   const [isUnlocked, setIsUnlocked] = useState(false); // Global unlock state - starts FALSE
   const [livenessVerified, setLivenessVerified] = useState(false);
   
+  // EXPLICIT VERIFICATION GATES: Both must be completed to unlock transactions
+  const [typingVerified, setTypingVerified] = useState(false);
+  const [circleVerified, setCircleVerified] = useState(false);
+  
   const { 
     data,
     handleMouseMove,
@@ -65,13 +69,17 @@ export function NeuroSignature() {
     }
   }, [data.isBreached, data.isBotMode, hmogData.isStaticDevice]);
 
-  // Track verification status - CRITICAL FIX: Once verified, stay verified
+  // Track verification status - REQUIRES BOTH typing AND circle verification
   useEffect(() => {
-    if (result.isHuman && result.confidence >= 85 && !data.isBreached && !hmogData.isStaticDevice) {
+    const hasCompletedBothTasks = typingVerified && circleVerified;
+    const hasHighConfidence = result.isHuman && result.confidence >= 85;
+    const isNotBreached = !data.isBreached && !hmogData.isStaticDevice;
+    
+    if (hasCompletedBothTasks && hasHighConfidence && isNotBreached) {
       setIsVerified(true);
       setIsUnlocked(true); // Set global unlock state
     }
-  }, [result.isHuman, result.confidence, data.isBreached, hmogData.isStaticDevice]);
+  }, [result.isHuman, result.confidence, data.isBreached, hmogData.isStaticDevice, typingVerified, circleVerified]);
 
   const handleBreachDetected = useCallback(() => {
     setShowBreachAlert(true);
@@ -94,11 +102,14 @@ export function NeuroSignature() {
     handleBreachDetected();
   }, [triggerBotTyping, handleBreachDetected]);
 
-  const handleVerificationComplete = useCallback((success: boolean, confidence: number) => {
-    if (success && confidence >= 85) {
-      setIsVerified(true);
-      setIsUnlocked(true); // Ensure global unlock
-    }
+  // Called when typing verification is complete
+  const handleTypingVerified = useCallback(() => {
+    setTypingVerified(true);
+  }, []);
+
+  // Called when circle trace verification is complete  
+  const handleCircleVerified = useCallback(() => {
+    setCircleVerified(true);
   }, []);
 
   const handleTransferAttempt = () => {
@@ -130,6 +141,8 @@ export function NeuroSignature() {
     setIsVerified(false);
     setIsUnlocked(false);
     setLivenessVerified(false);
+    setTypingVerified(false);
+    setCircleVerified(false);
   };
 
   const isBreached = data.isBreached || hmogData.isStaticDevice;
@@ -240,7 +253,8 @@ export function NeuroSignature() {
         
         <SecurityTerminal 
           onBreachDetected={handleBreachDetected} 
-          onVerificationComplete={handleVerificationComplete}
+          onTypingVerified={handleTypingVerified}
+          onCircleVerified={handleCircleVerified}
         />
 
         {/* Neural Profile Manager + Grip Stability + Developer Tools */}
