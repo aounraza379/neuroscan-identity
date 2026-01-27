@@ -14,10 +14,11 @@ const TARGET_PHRASE = 'I am a biological entity.';
 
 interface SecurityTerminalProps {
   onBreachDetected?: () => void;
-  onVerificationComplete?: (success: boolean, confidence: number) => void;
+  onTypingVerified?: () => void;
+  onCircleVerified?: () => void;
 }
 
-export function SecurityTerminal({ onBreachDetected, onVerificationComplete }: SecurityTerminalProps) {
+export function SecurityTerminal({ onBreachDetected, onTypingVerified, onCircleVerified }: SecurityTerminalProps) {
   const [typedText, setTypedText] = useState('');
   const [testState, setTestState] = useState<'idle' | 'scanning' | 'complete'>('idle');
   const [isPasteDetected, setIsPasteDetected] = useState(false);
@@ -49,13 +50,21 @@ export function SecurityTerminal({ onBreachDetected, onVerificationComplete }: S
     
     setTypedText(value);
     
-    if (value === TARGET_PHRASE && hasMouseData) {
-      setTimeout(() => {
-        setTestState('complete');
-        const currentResult = analyzeResult();
-        onVerificationComplete?.(currentResult.isHuman, currentResult.confidence);
-      }, 500);
+    // Notify when typing is complete
+    if (value === TARGET_PHRASE) {
+      onTypingVerified?.();
+      
+      if (hasMouseData) {
+        setTimeout(() => {
+          setTestState('complete');
+        }, 500);
+      }
     }
+  };
+
+  // Called when circle trace has sufficient data
+  const handleCircleComplete = () => {
+    onCircleVerified?.();
   };
 
   const handleReset = () => {
@@ -167,6 +176,7 @@ export function SecurityTerminal({ onBreachDetected, onVerificationComplete }: S
                   mouseVariance={data.mouseVariance}
                   isComplete={hasMouseData}
                   onSimulateBotCircle={handleSimulateBot}
+                  onCircleComplete={handleCircleComplete}
                 />
               </div>
               

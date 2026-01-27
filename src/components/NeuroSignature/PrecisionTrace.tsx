@@ -8,13 +8,24 @@ interface PrecisionTraceProps {
   mouseVariance: number;
   isComplete: boolean;
   onSimulateBotCircle?: () => void;
+  onCircleComplete?: () => void;
 }
 
-export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimulateBotCircle }: PrecisionTraceProps) {
+export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimulateBotCircle, onCircleComplete }: PrecisionTraceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   const [isTracing, setIsTracing] = useState(false);
   const [isSimulatingBot, setIsSimulatingBot] = useState(false);
+  const [hasNotifiedComplete, setHasNotifiedComplete] = useState(false);
+
+  // Notify when circle is complete (enough points with natural variance)
+  const checkCircleComplete = useCallback((pathLength: number, variance: number) => {
+    // Require at least 30 points with natural variance (> 3px)
+    if (pathLength >= 30 && variance > 3 && !hasNotifiedComplete) {
+      setHasNotifiedComplete(true);
+      onCircleComplete?.();
+    }
+  }, [hasNotifiedComplete, onCircleComplete]);
 
   // Use pointer events for both mouse and touch
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -40,9 +51,13 @@ export function PrecisionTrace({ onMouseMove, mouseVariance, isComplete, onSimul
     
     // Only add to visual path if on or near the target
     if (isOnPath || path.length > 0) {
-      setPath(prev => [...prev, { x, y }].slice(-100));
+      const newPath = [...path, { x, y }].slice(-100);
+      setPath(newPath);
+      
+      // Check if circle trace is complete
+      checkCircleComplete(newPath.length, mouseVariance);
     }
-  }, [onMouseMove, isTracing, isSimulatingBot, path.length]);
+  }, [onMouseMove, isTracing, isSimulatingBot, path, checkCircleComplete, mouseVariance]);
 
   const handlePointerEnter = () => {
     if (!isSimulatingBot) {
