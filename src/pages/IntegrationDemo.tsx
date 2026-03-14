@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ShieldCheck, ShieldAlert, ArrowLeft, Copy, Check, CreditCard, Lock, Fingerprint } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldAlert, ArrowLeft, Copy, Check, CreditCard, Lock, Fingerprint, Activity, Eye, Keyboard, MousePointer } from 'lucide-react';
 import { useNeuroGuard } from '@/hooks/useNeuroGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
