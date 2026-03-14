@@ -29,7 +29,7 @@ function PaymentForm() {
 }`;
 
 export default function IntegrationDemo() {
-  const { isHuman, confidence, verdict, pasteDetected, botDetected, formProps, reset } = useNeuroGuard({ threshold: 70 });
+  const { isHuman, confidence, verdict, pasteDetected, botDetected, botReason, environmentFlags, verificationToken, trajectory, signals, formProps, reset } = useNeuroGuard({ threshold: 70 });
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [submitted, setSubmitted] = useState(false);
