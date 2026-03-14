@@ -202,6 +202,13 @@ export function NeuroSignature() {
               onLivenessResult={handleLivenessResult}
             />
             
+            <Link
+              to="/integration"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Code2 className="w-5 h-5" />
+              <span className="hidden sm:inline font-mono">Integration Demo</span>
+            </Link>
             <a
               href="https://github.com"
               target="_blank"
