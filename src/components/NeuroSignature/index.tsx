@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Github, Landmark } from 'lucide-react';
+import { Github, Landmark, Code2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { SecurityTerminal } from './SecurityTerminal';
 import { ProjectNarrative } from './ProjectNarrative';
 import { LivenessChallenge } from './LivenessChallenge';
@@ -201,6 +202,13 @@ export function NeuroSignature() {
               onLivenessResult={handleLivenessResult}
             />
             
+            <Link
+              to="/integration"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Code2 className="w-5 h-5" />
+              <span className="hidden sm:inline font-mono">Integration Demo</span>
+            </Link>
             <a
               href="https://github.com"
               target="_blank"
