@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ShieldCheck, ShieldAlert, ArrowLeft, Copy, Check, CreditCard, Lock, Fingerprint } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldAlert, ArrowLeft, Copy, Check, CreditCard, Lock, Fingerprint, Activity, Eye, Keyboard, MousePointer } from 'lucide-react';
 import { useNeuroGuard } from '@/hooks/useNeuroGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,7 @@ function PaymentForm() {
 }`;
 
 export default function IntegrationDemo() {
-  const { isHuman, confidence, verdict, pasteDetected, botDetected, formProps, reset } = useNeuroGuard({ threshold: 70 });
+  const { isHuman, confidence, verdict, pasteDetected, botDetected, botReason, environmentFlags, verificationToken, trajectory, signals, formProps, reset } = useNeuroGuard({ threshold: 70 });
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -274,21 +274,116 @@ export default function IntegrationDemo() {
               </AnimatePresence>
             </div>
 
-            {/* API Reference mini */}
+            {/* Live Signal Monitor */}
             <div className="mt-6 glassmorphism rounded-xl p-4">
+              <h4 className="font-mono text-xs text-primary mb-3 font-bold flex items-center gap-2">
+                <Activity className="w-3 h-3" />
+                LIVE SIGNAL MONITOR
+              </h4>
+              <div className="grid grid-cols-2 gap-3 font-mono text-xs">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Keyboard className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Keystrokes:</span>
+                    <span className="text-foreground">{signals.keystrokeCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground ml-5">Timing σ:</span>
+                    <span className={signals.timingVariance < 2 && signals.keystrokeCount > 5 ? 'text-destructive' : 'text-foreground'}>
+                      {signals.timingVariance.toFixed(1)}ms
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground ml-5">Avg speed:</span>
+                    <span className={signals.avgTypingSpeed > 0 && signals.avgTypingSpeed < 30 ? 'text-destructive' : 'text-foreground'}>
+                      {signals.avgTypingSpeed > 0 ? `${signals.avgTypingSpeed.toFixed(0)}ms` : '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MousePointer className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Points:</span>
+                    <span className="text-foreground">{signals.mousePoints}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground ml-5">Straightness:</span>
+                    <span className={signals.straightnessRatio > 0.98 && signals.mousePoints > 20 ? 'text-destructive' : 'text-foreground'}>
+                      {(signals.straightnessRatio * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground ml-5">Curvature:</span>
+                    <span className={signals.avgCurvature < 1.5 && signals.mousePoints > 20 ? 'text-destructive' : 'text-foreground'}>
+                      {signals.avgCurvature.toFixed(1)}°
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Environment flags */}
+              {environmentFlags.length > 0 && (
+                <div className="mt-3 p-2 rounded bg-destructive/10 border border-destructive/30">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-3 h-3 text-destructive" />
+                    <span className="text-xs font-mono text-destructive">
+                      HEADLESS FLAGS: {environmentFlags.join(', ')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Bot reason */}
+              {botReason && (
+                <div className="mt-3 p-2 rounded bg-destructive/10 border border-destructive/30">
+                  <span className="text-xs font-mono text-destructive">⛔ {botReason}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Verification Token */}
+            <div className="mt-4 glassmorphism rounded-xl p-4">
+              <h4 className="font-mono text-xs text-primary mb-3 font-bold flex items-center gap-2">
+                <Lock className="w-3 h-3" />
+                VERIFICATION TOKEN
+              </h4>
+              {verificationToken ? (
+                <div className="space-y-2">
+                  <div className="p-2 rounded bg-primary/10 border border-primary/30">
+                    <p className="text-xs font-mono text-primary break-all leading-relaxed">
+                      {verificationToken.slice(0, 80)}...
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    HMAC-SHA256 signed proof. Send with your form submission — backend verifies the signature before processing.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs font-mono text-muted-foreground">
+                  Token generates when confidence passes threshold. Keep interacting naturally.
+                </p>
+              )}
+            </div>
+
+            {/* API Reference */}
+            <div className="mt-4 glassmorphism rounded-xl p-4">
               <h4 className="font-mono text-xs text-primary mb-3 font-bold">HOOK API</h4>
               <div className="space-y-1.5 font-mono text-xs">
                 {[
-                  ['isHuman', 'boolean', 'Whether confidence exceeds threshold'],
-                  ['confidence', 'number', 'Score 0-100 based on behavior'],
-                  ['verdict', 'string', 'Human-readable status message'],
-                  ['formProps', 'object', 'Spread onto your <form> element'],
-                  ['botDetected', 'boolean', 'True if bot patterns found'],
-                  ['pasteDetected', 'boolean', 'True if paste event occurred'],
-                  ['reset()', 'function', 'Clear all tracking data'],
+                  ['isHuman', 'boolean', 'Confidence exceeds threshold'],
+                  ['confidence', 'number', '0-100 behavioral score'],
+                  ['verdict', 'string', 'Human-readable status'],
+                  ['formProps', 'object', 'Spread onto <form>'],
+                  ['botDetected', 'boolean', 'Hard bot failure triggered'],
+                  ['botReason', 'string?', 'Specific detection reason'],
+                  ['environmentFlags', 'string[]', 'Headless browser flags'],
+                  ['verificationToken', 'string?', 'HMAC-signed proof token'],
+                  ['trajectory', 'object', 'Curvature, straightness, accel'],
+                  ['signals', 'object', 'Raw signal counts'],
+                  ['reset()', 'fn', 'Clear all data'],
                 ].map(([name, type, desc]) => (
                   <div key={name} className="flex items-start gap-2">
-                    <span className="text-primary shrink-0 w-28">{name}</span>
+                    <span className="text-primary shrink-0 w-32">{name}</span>
                     <span className="text-muted-foreground shrink-0 w-16">{type}</span>
                     <span className="text-foreground/70">{desc}</span>
                   </div>
