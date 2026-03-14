@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Github, Landmark } from 'lucide-react';
+import { Github, Landmark, Code2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { SecurityTerminal } from './SecurityTerminal';
 import { ProjectNarrative } from './ProjectNarrative';
 import { LivenessChallenge } from './LivenessChallenge';
