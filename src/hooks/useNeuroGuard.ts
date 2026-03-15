@@ -174,7 +174,9 @@ function analyzeTrajectory(positions: { x: number; y: number; time: number }[]):
 }
 
 // --- Verification Token ---
+// Now uses server-issued clientKey instead of hardcoded secret
 async function generateProofToken(
+  clientKey: string,
   confidence: number,
   signals: {
     keystrokeCount: number;
@@ -201,9 +203,8 @@ async function generateProofToken(
   const payloadStr = JSON.stringify(payload);
   const encoder = new TextEncoder();
   
-  // HMAC-SHA256 sign with a session-derived key
-  // In production, this key would come from your backend on session init
-  const keyData = encoder.encode(`neuro_${payload.n}_${payload.t}`);
+  // HMAC-SHA256 sign with server-issued clientKey
+  const keyData = encoder.encode(clientKey);
   const key = await crypto.subtle.importKey(
     'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );
