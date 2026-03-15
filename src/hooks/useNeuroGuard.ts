@@ -248,8 +248,9 @@ export interface NeuroGuardResult {
   reset: () => void;
 }
 
-export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResult {
+export function useNeuroGuard(options?: { threshold?: number; backendUrl?: string }): NeuroGuardResult {
   const threshold = options?.threshold ?? 75;
+  const backendUrl = options?.backendUrl ?? null;
 
   const [dwellTimes, setDwellTimes] = useState<number[]>([]);
   const [flightTimes, setFlightTimes] = useState<number[]>([]);
@@ -259,6 +260,8 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
   const [keystrokeScore, setKeystrokeScore] = useState(0);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [envSignals, setEnvSignals] = useState<EnvironmentSignals>({ isHeadless: false, flags: [] });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [clientKey, setClientKey] = useState<string | null>(null);
 
   const keyDownTime = useRef(0);
   const lastKeyUpTime = useRef(0);
@@ -270,6 +273,19 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
   useEffect(() => {
     setEnvSignals(detectHeadlessBrowser());
   }, []);
+
+  // Fetch session key from backend if configured
+  useEffect(() => {
+    if (!backendUrl) return;
+    fetch(`${backendUrl}/api/session/init`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        setSessionId(data.sessionId);
+        setClientKey(data.clientKey);
+        console.log(`[NeuroGuard] Session initialized: ${data.sessionId}`);
+      })
+      .catch(err => console.warn('[NeuroGuard] Backend unavailable, running client-only:', err.message));
+  }, [backendUrl]);
 
   // Progressive movement scoring
   useEffect(() => {
