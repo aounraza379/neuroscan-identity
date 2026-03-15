@@ -228,15 +228,13 @@ export interface NeuroGuardResult {
   };
   pasteDetected: boolean;
   botDetected: boolean;
-  /** Specific reason if bot detected */
   botReason: string | null;
-  /** Headless browser flags detected */
   environmentFlags: string[];
   /** Signed proof token (null until isHuman=true) */
   verificationToken: string | null;
-  /** Trajectory analysis metrics */
+  /** Session ID from backend (null if no backend configured) */
+  sessionId: string | null;
   trajectory: TrajectoryMetrics;
-  /** Raw signal counts for debugging */
   signals: {
     keystrokeCount: number;
     mousePoints: number;
@@ -245,6 +243,8 @@ export interface NeuroGuardResult {
     straightnessRatio: number;
     avgCurvature: number;
   };
+  /** Call to verify token server-side. Returns { verified, error? } */
+  verifyOnServer: () => Promise<{ verified: boolean; error?: string }>;
   reset: () => void;
 }
 
