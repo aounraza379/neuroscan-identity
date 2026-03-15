@@ -174,7 +174,9 @@ function analyzeTrajectory(positions: { x: number; y: number; time: number }[]):
 }
 
 // --- Verification Token ---
+// Now uses server-issued clientKey instead of hardcoded secret
 async function generateProofToken(
+  clientKey: string,
   confidence: number,
   signals: {
     keystrokeCount: number;
@@ -201,9 +203,8 @@ async function generateProofToken(
   const payloadStr = JSON.stringify(payload);
   const encoder = new TextEncoder();
   
-  // HMAC-SHA256 sign with a session-derived key
-  // In production, this key would come from your backend on session init
-  const keyData = encoder.encode(`neuro_${payload.n}_${payload.t}`);
+  // HMAC-SHA256 sign with server-issued clientKey
+  const keyData = encoder.encode(clientKey);
   const key = await crypto.subtle.importKey(
     'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );
@@ -227,15 +228,13 @@ export interface NeuroGuardResult {
   };
   pasteDetected: boolean;
   botDetected: boolean;
-  /** Specific reason if bot detected */
   botReason: string | null;
-  /** Headless browser flags detected */
   environmentFlags: string[];
   /** Signed proof token (null until isHuman=true) */
   verificationToken: string | null;
-  /** Trajectory analysis metrics */
+  /** Session ID from backend (null if no backend configured) */
+  sessionId: string | null;
   trajectory: TrajectoryMetrics;
-  /** Raw signal counts for debugging */
   signals: {
     keystrokeCount: number;
     mousePoints: number;
@@ -244,11 +243,14 @@ export interface NeuroGuardResult {
     straightnessRatio: number;
     avgCurvature: number;
   };
+  /** Call to verify token server-side. Returns { verified, error? } */
+  verifyOnServer: () => Promise<{ verified: boolean; error?: string }>;
   reset: () => void;
 }
 
-export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResult {
+export function useNeuroGuard(options?: { threshold?: number; backendUrl?: string }): NeuroGuardResult {
   const threshold = options?.threshold ?? 75;
+  const backendUrl = options?.backendUrl ?? null;
 
   const [dwellTimes, setDwellTimes] = useState<number[]>([]);
   const [flightTimes, setFlightTimes] = useState<number[]>([]);
@@ -258,6 +260,8 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
   const [keystrokeScore, setKeystrokeScore] = useState(0);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [envSignals, setEnvSignals] = useState<EnvironmentSignals>({ isHeadless: false, flags: [] });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [clientKey, setClientKey] = useState<string | null>(null);
 
   const keyDownTime = useRef(0);
   const lastKeyUpTime = useRef(0);
@@ -269,6 +273,19 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
   useEffect(() => {
     setEnvSignals(detectHeadlessBrowser());
   }, []);
+
+  // Fetch session key from backend if configured
+  useEffect(() => {
+    if (!backendUrl) return;
+    fetch(`${backendUrl}/api/session/init`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        setSessionId(data.sessionId);
+        setClientKey(data.clientKey);
+        console.log(`[NeuroGuard] Session initialized: ${data.sessionId}`);
+      })
+      .catch(err => console.warn('[NeuroGuard] Backend unavailable, running client-only:', err.message));
+  }, [backendUrl]);
 
   // Progressive movement scoring
   useEffect(() => {
@@ -409,7 +426,9 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
     if (result.isHuman && !tokenGenerated.current) {
       tokenGenerated.current = true;
       const timingVar = calculateVariance([...dwellTimes, ...flightTimes]);
-      generateProofToken(result.confidence, {
+      // Use server-issued clientKey if available, otherwise use a local fallback
+      const signingKey = clientKey || `local_${Date.now()}`;
+      generateProofToken(signingKey, result.confidence, {
         keystrokeCount: dwellTimes.length,
         mousePoints: mousePositions.length,
         avgCurvature: trajectory.avgCurvature,
@@ -417,11 +436,28 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
         environmentFlags: envSignals.flags,
       }).then(setVerificationToken);
     }
-  }, [result.isHuman, result.confidence, dwellTimes, flightTimes, mousePositions.length, trajectory.avgCurvature, envSignals.flags]);
+  }, [result.isHuman, result.confidence, dwellTimes, flightTimes, mousePositions.length, trajectory.avgCurvature, envSignals.flags, clientKey]);
 
   const avgTypingSpeed = flightTimes.length > 0
     ? flightTimes.reduce((a, b) => a + b, 0) / flightTimes.length
     : 0;
+
+  // Server-side verification call
+  const verifyOnServer = useCallback(async (): Promise<{ verified: boolean; error?: string }> => {
+    if (!backendUrl || !sessionId || !verificationToken) {
+      return { verified: false, error: backendUrl ? 'NO_TOKEN' : 'NO_BACKEND' };
+    }
+    try {
+      const res = await fetch(`${backendUrl}/api/session/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, token: verificationToken }),
+      });
+      return await res.json();
+    } catch (err) {
+      return { verified: false, error: 'NETWORK_ERROR' };
+    }
+  }, [backendUrl, sessionId, verificationToken]);
 
   const reset = useCallback(() => {
     setDwellTimes([]);
@@ -446,6 +482,7 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
     botReason: result.botReason,
     environmentFlags: envSignals.flags,
     verificationToken,
+    sessionId,
     trajectory,
     signals: {
       keystrokeCount: dwellTimes.length,
@@ -456,6 +493,7 @@ export function useNeuroGuard(options?: { threshold?: number }): NeuroGuardResul
       avgCurvature: trajectory.avgCurvature,
     },
     formProps: { onMouseMove, onKeyDown, onKeyUp, onPaste },
+    verifyOnServer,
     reset,
   };
 }
