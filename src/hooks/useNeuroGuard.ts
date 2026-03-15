@@ -426,7 +426,9 @@ export function useNeuroGuard(options?: { threshold?: number; backendUrl?: strin
     if (result.isHuman && !tokenGenerated.current) {
       tokenGenerated.current = true;
       const timingVar = calculateVariance([...dwellTimes, ...flightTimes]);
-      generateProofToken(result.confidence, {
+      // Use server-issued clientKey if available, otherwise use a local fallback
+      const signingKey = clientKey || `local_${Date.now()}`;
+      generateProofToken(signingKey, result.confidence, {
         keystrokeCount: dwellTimes.length,
         mousePoints: mousePositions.length,
         avgCurvature: trajectory.avgCurvature,
@@ -434,11 +436,28 @@ export function useNeuroGuard(options?: { threshold?: number; backendUrl?: strin
         environmentFlags: envSignals.flags,
       }).then(setVerificationToken);
     }
-  }, [result.isHuman, result.confidence, dwellTimes, flightTimes, mousePositions.length, trajectory.avgCurvature, envSignals.flags]);
+  }, [result.isHuman, result.confidence, dwellTimes, flightTimes, mousePositions.length, trajectory.avgCurvature, envSignals.flags, clientKey]);
 
   const avgTypingSpeed = flightTimes.length > 0
     ? flightTimes.reduce((a, b) => a + b, 0) / flightTimes.length
     : 0;
+
+  // Server-side verification call
+  const verifyOnServer = useCallback(async (): Promise<{ verified: boolean; error?: string }> => {
+    if (!backendUrl || !sessionId || !verificationToken) {
+      return { verified: false, error: backendUrl ? 'NO_TOKEN' : 'NO_BACKEND' };
+    }
+    try {
+      const res = await fetch(`${backendUrl}/api/session/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, token: verificationToken }),
+      });
+      return await res.json();
+    } catch (err) {
+      return { verified: false, error: 'NETWORK_ERROR' };
+    }
+  }, [backendUrl, sessionId, verificationToken]);
 
   const reset = useCallback(() => {
     setDwellTimes([]);
@@ -463,6 +482,7 @@ export function useNeuroGuard(options?: { threshold?: number; backendUrl?: strin
     botReason: result.botReason,
     environmentFlags: envSignals.flags,
     verificationToken,
+    sessionId,
     trajectory,
     signals: {
       keystrokeCount: dwellTimes.length,
@@ -473,6 +493,7 @@ export function useNeuroGuard(options?: { threshold?: number; backendUrl?: strin
       avgCurvature: trajectory.avgCurvature,
     },
     formProps: { onMouseMove, onKeyDown, onKeyUp, onPaste },
+    verifyOnServer,
     reset,
   };
 }
